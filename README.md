@@ -4,6 +4,16 @@ A focused GNOME Shell tiling extension for GNOME 48–50, built because Pop Shel
 
 Tested on GNOME 50 / Wayland / Fedora 44.
 
+## Demo
+
+**Dwindle (BSP) auto-tiling** — open several terminals (`Super+Enter`) and each new window automatically splits the largest space. The colored outline marks the focused window.
+
+![Opening several terminals with dwindle auto-tiling](./assets/demo-autotiling.gif)
+
+**Moving windows around** — rearrange the layout by swapping the focused window with its neighbors (`Super+Shift+Arrow`).
+
+![Moving windows to different positions](./assets/demo-moving-windows.gif)
+
 ## Features
 
 - **Dwindle (BSP) auto-tiling** — new windows split the largest available space; split direction alternates with aspect ratio. One BSP tree per monitor per workspace.
@@ -98,4 +108,3 @@ MIT. See [LICENSE](./LICENSE).
 ## Credits
 
 Author: George Dakhil
-Co-built with [Claude Code](https://claude.com/claude-code).
