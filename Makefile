@@ -1,4 +1,4 @@
-UUID         = tiling-dakhil-manager@georgedakhil
+UUID         = dwindle@taylorbeeston
 INSTALL_DIR  = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 SOURCE_DIR   = $(CURDIR)
 SCHEMA_DIR   = $(SOURCE_DIR)/schemas
@@ -52,7 +52,7 @@ status:
 
 pack: build
 	@cd "$(SOURCE_DIR)" && zip -r "$(UUID).zip" \
-		metadata.json extension.js prefs.js schemas/ \
+		metadata.json extension.js prefs.js animationMath.js workspaceMath.js schemas/ \
 		-x 'schemas/gschemas.compiled' \
 		>/dev/null
 	@echo "Built: $(SOURCE_DIR)/$(UUID).zip"

@@ -8,13 +8,41 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import {flipTransform, geometryChanged} from './animationMath.js';
+import {
+    actualWorkspaceForLocal,
+    modulo,
+    shiftedOffset,
+    shiftTreeKeyForConnector,
+    treeKey,
+} from './workspaceMath.js';
 
 const MIN_WORKSPACES = 1;
-const MAX_WORKSPACES = 9;
+const MAX_WORKSPACES = 10;
 const NATIVE_WM_SCHEMA = 'org.gnome.desktop.wm.keybindings';
 const NATIVE_SHELL_SCHEMA = 'org.gnome.shell.keybindings';
 const NATIVE_PREFS_SCHEMA = 'org.gnome.desktop.wm.preferences';
+const DisplayConfigProxy = Gio.DBusProxy.makeProxyWrapper(`
+<node>
+  <interface name="org.gnome.Mutter.DisplayConfig">
+    <method name="GetCurrentState">
+      <arg name="serial" direction="out" type="u"/>
+      <arg name="monitors" direction="out" type="a((ssss)a(siiddada{sv})a{sv})"/>
+      <arg name="logicalMonitors" direction="out" type="a(iiduba(ssss)a{sv})"/>
+      <arg name="properties" direction="out" type="a{sv}"/>
+    </method>
+  </interface>
+</node>`);
+
 const NATIVE_MUTTER_SCHEMA = 'org.gnome.mutter';
+function laterAdd(type, callback) {
+    return global.compositor.get_laters().add(type, callback);
+}
+
+function laterRemove(sourceId) {
+    global.compositor.get_laters().remove(sourceId);
+}
+
 
 export default class TilingExtension extends Extension {
     enable() {
@@ -34,8 +62,38 @@ export default class TilingExtension extends Extension {
         this._floatNextButton = null;
         this._retileQueued = false;
         this._retileSourceId = 0;
+        this._managedWorkspaceMoves = new Set();
+        this._managedMonitorMoves = new Set();
         this._workspaceCount = Math.max(MIN_WORKSPACES,
             Math.min(MAX_WORKSPACES, this._settings.get_int('workspace-count')));
+        this._monitorWorkspaceOffsets = this._loadMonitorWorkspaceOffsets();
+        this._monitorConnectors = new Map();
+        this._displayConfigProxy = new DisplayConfigProxy(
+            Gio.DBus.session,
+            'org.gnome.Mutter.DisplayConfig',
+            '/org/gnome/Mutter/DisplayConfig',
+            (proxy, error) => {
+                if (error) {
+                    console.error(`[Dwindle] Cannot read monitor connectors: ${error}`);
+                    return;
+                }
+
+                if (proxy === this._displayConfigProxy)
+                    this._refreshMonitorConnectors();
+            }
+        );
+
+        this._animationsReady = false;
+        this._animationReadySourceId = 0;
+        this._pendingWindowAnimations = new Map();
+        this._workspaceAnimationSources = new Set();
+        this._animatedActors = new Set();
+        this._workspaceCloneContainers = new Set();
+        this._workspaceSwitching = false;
+        this._animationDisabledClasses = new Set(
+            this._settings.get_strv('animation-disabled-classes')
+                .map(value => value.toLowerCase())
+        );
 
         this._installWorkspaceCount();
         this._installNativeWorkspaceBindings();
@@ -44,6 +102,10 @@ export default class TilingExtension extends Extension {
         this._installPanelLayout();
 
         for (let i = 1; i <= this._workspaceCount; i++) {
+            this._addKeybinding(
+                `switch-local-workspace-${i}`,
+                () => this._switchLocalWorkspace(i - 1)
+            );
             this._addKeybinding(
                 `move-window-to-workspace-${i}`,
                 () => this._moveWindowToWorkspace(i - 1)
@@ -84,13 +146,23 @@ export default class TilingExtension extends Extension {
             this._reapplyFloatingClasses();
             this._retileAll();
         });
+        this._animationClassChangedId = this._settings.connect(
+            'changed::animation-disabled-classes',
+            () => {
+                this._animationDisabledClasses = new Set(
+                    this._settings.get_strv('animation-disabled-classes')
+                        .map(value => value.toLowerCase())
+                );
+            }
+        );
         this._countChangedId = this._settings.connect('changed::workspace-count', () => {
             const newCount = this._settings.get_int('workspace-count');
             if (this._wmPrefsSettings)
                 this._wmPrefsSettings.set_int('num-workspaces', newCount);
             this._workspaceCount = newCount;
-            Main.notify('Tiling',
-                `Workspaces: ${newCount}. Desactiva y reactiva la extension para refrescar atajos Super+N.`);
+            this._normalizeMonitorWorkspaceOffsets();
+            Main.notify('Dwindle',
+                `Workspaces: ${newCount}. Disable and re-enable the extension to refresh Super+N bindings.`);
         });
         this._panelChangedIds = [
             this._settings.connect('changed::panel-spacing',
@@ -104,9 +176,11 @@ export default class TilingExtension extends Extension {
         this._windowCreatedId = global.display.connect('window-created',
             (_d, win) => this._onWindowCreated(win));
         this._switchWsId = global.window_manager.connect('switch-workspace',
-            () => this._retileAll());
+            (_wm, from, to) => this._onWorkspaceSwitch(from, to));
         this._grabOpEndId = global.display.connect('grab-op-end',
             (_d, win) => this._onGrabOpEnd(win));
+        this._monitorsChangedId = Main.layoutManager.connect('monitors-changed',
+            () => this._onMonitorsChanged());
 
         this._installFocusBorder();
 
@@ -114,6 +188,14 @@ export default class TilingExtension extends Extension {
             this._handleExistingOrNewWindow(win);
 
         this._retileAll();
+        this._animationReadySourceId = GLib.idle_add(
+            GLib.PRIORITY_DEFAULT_IDLE,
+            () => {
+                this._animationsReady = true;
+                this._animationReadySourceId = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+        );
     }
 
     disable() {
@@ -147,11 +229,17 @@ export default class TilingExtension extends Extension {
             global.display.disconnect(this._grabOpEndId);
             this._grabOpEndId = null;
         }
+        if (this._monitorsChangedId) {
+            Main.layoutManager.disconnect(this._monitorsChangedId);
+            this._monitorsChangedId = null;
+        }
         if (this._settings) {
             if (this._gapChangedId) this._settings.disconnect(this._gapChangedId);
             if (this._enabledChangedId) this._settings.disconnect(this._enabledChangedId);
             if (this._floatClassChangedId) this._settings.disconnect(this._floatClassChangedId);
             if (this._countChangedId) this._settings.disconnect(this._countChangedId);
+            if (this._animationClassChangedId)
+                this._settings.disconnect(this._animationClassChangedId);
             if (this._panelChangedIds) {
                 for (const id of this._panelChangedIds) {
                     try { this._settings.disconnect(id); } catch (_e) {}
@@ -162,6 +250,7 @@ export default class TilingExtension extends Extension {
         this._enabledChangedId = null;
         this._floatClassChangedId = null;
         this._countChangedId = null;
+        this._animationClassChangedId = null;
         this._panelChangedIds = null;
 
         if (this._pendingFirstFrame) {
@@ -177,12 +266,21 @@ export default class TilingExtension extends Extension {
             this._retileSourceId = 0;
         }
         this._retileQueued = false;
+        this._cleanupAnimations();
 
         if (this._floatingWindows) this._floatingWindows.clear();
         this._floatingWindows = null;
         if (this._trees) this._trees.clear();
         this._trees = null;
         this._lastFocusedTileable = null;
+        if (this._managedWorkspaceMoves) this._managedWorkspaceMoves.clear();
+        this._managedWorkspaceMoves = null;
+        if (this._managedMonitorMoves) this._managedMonitorMoves.clear();
+        this._managedMonitorMoves = null;
+        this._monitorWorkspaceOffsets = null;
+        this._displayConfigProxy = null;
+        this._monitorConnectors = null;
+        this._animationDisabledClasses = null;
 
         if (this._windowSignals) {
             for (const [win, ids] of this._windowSignals) {
@@ -234,17 +332,16 @@ export default class TilingExtension extends Extension {
 
         for (let i = 1; i <= this._workspaceCount; i++) {
             const wsKey = `switch-to-workspace-${i}`;
-            const appKey = `switch-to-application-${i}`;
+            const appKey = i <= 9 ? `switch-to-application-${i}` : null;
 
             this._savedNativeBindings[wsKey] = this._wmSettings.get_strv(wsKey);
-            this._savedNativeBindings[appKey] = this._shellSettings.get_strv(appKey);
 
-            this._shellSettings.set_strv(appKey, []);
+            if (appKey) {
+                this._savedNativeBindings[appKey] = this._shellSettings.get_strv(appKey);
+                this._shellSettings.set_strv(appKey, []);
+            }
 
-            const current = this._wmSettings.get_strv(wsKey);
-            const want = `<Super>${i}`;
-            if (!current.includes(want))
-                this._wmSettings.set_strv(wsKey, [...current, want]);
+            this._wmSettings.set_strv(wsKey, []);
         }
     }
 
@@ -572,14 +669,288 @@ export default class TilingExtension extends Extension {
             parent.set_child_above_sibling(this._focusBorder, null);
     }
 
-    _moveWindowToWorkspace(index) {
+    _moveWindowToWorkspace(localIndex) {
         const win = global.display.focus_window;
         if (!win) return;
-        const wsManager = global.workspace_manager;
-        if (index >= wsManager.n_workspaces) return;
-        const target = wsManager.get_workspace_by_index(index);
-        win.change_workspace(target);
-        target.activate_with_focus(win, global.get_current_time());
+
+        if (!this._settings.get_boolean('monitor-local-workspaces')) {
+            const target = global.workspace_manager.get_workspace_by_index(localIndex);
+            if (!target) return;
+
+            win.change_workspace(target);
+            target.activate_with_focus(win, global.get_current_time());
+            return;
+        }
+
+        const monitor = win.get_monitor();
+        const targetIndex = this._actualWorkspaceForLocal(monitor, localIndex);
+        const target = global.workspace_manager.get_workspace_by_index(targetIndex);
+        if (!target) return;
+
+        if (win.get_workspace() !== target)
+            win.change_workspace(target);
+
+        this._switchLocalWorkspace(localIndex, win);
+    }
+
+    _switchLocalWorkspace(localIndex, focusWindow = null) {
+        const monitor = focusWindow?.get_monitor() ?? this._activeMonitor();
+
+        if (!this._settings.get_boolean('monitor-local-workspaces')) {
+            const target = global.workspace_manager.get_workspace_by_index(localIndex);
+            if (!target) return;
+
+            target.activate(global.get_current_time());
+            return;
+        }
+
+        const activeIndex = global.workspace_manager.get_active_workspace_index();
+        const targetIndex = this._actualWorkspaceForLocal(monitor, localIndex);
+        if (targetIndex === activeIndex) {
+            focusWindow?.activate(global.get_current_time());
+            return;
+        }
+
+        const target = global.workspace_manager.get_workspace_by_index(targetIndex);
+        const candidate = focusWindow ?? target?.list_windows().find(win =>
+            win.get_monitor() === monitor
+            && !win.minimized
+            && win.get_window_type() === Meta.WindowType.NORMAL
+        );
+        const currentLocal = modulo(
+            activeIndex - this._monitorOffset(monitor),
+            this._workspaceCount
+        );
+        const direction = localIndex > currentLocal ? 1 : -1;
+        const transition = this._prepareWorkspaceTransition(
+            monitor,
+            target,
+            direction
+        );
+
+        this._workspaceSwitching = true;
+        try {
+            this._rotateMonitor(monitor, activeIndex - targetIndex);
+            this._retileWorkspace(global.workspace_manager.get_active_workspace());
+        } finally {
+            this._workspaceSwitching = false;
+        }
+
+        this._runWorkspaceTransition(transition);
+        candidate?.activate(global.get_current_time());
+    }
+
+    _activeMonitor() {
+        const win = global.display.focus_window;
+
+        if (win)
+            return win.get_monitor();
+
+        return global.display.get_current_monitor();
+    }
+
+    _monitorConnector(monitor) {
+        return this._monitorConnectors?.get(monitor)
+            ?? Main.layoutManager.monitors[monitor]?.connector
+            ?? `monitor-${monitor}`;
+    }
+
+    _refreshMonitorConnectors() {
+        const proxy = this._displayConfigProxy;
+
+        if (!proxy) return;
+
+        proxy.GetCurrentStateRemote((state, error) => {
+            if (error) {
+                console.error(`[Dwindle] Cannot refresh monitor connectors: ${error}`);
+                return;
+            }
+
+            if (proxy !== this._displayConfigProxy || !this._monitorWorkspaceOffsets)
+                return;
+
+            const [, monitors] = state;
+            const monitorManager = global.backend.get_monitor_manager();
+            const connectors = new Map();
+
+            for (const [[connector]] of monitors) {
+                const monitor = monitorManager.get_monitor_for_connector(connector);
+
+                if (monitor >= 0) connectors.set(monitor, connector);
+            }
+
+            const migrations = new Map();
+
+            for (const [monitor, connector] of connectors) {
+                const fallback = `monitor-${monitor}`;
+
+                if (!this._monitorWorkspaceOffsets.has(fallback)) continue;
+
+                if (!this._monitorWorkspaceOffsets.has(connector))
+                    this._monitorWorkspaceOffsets.set(
+                        connector,
+                        this._monitorWorkspaceOffsets.get(fallback)
+                    );
+
+                this._monitorWorkspaceOffsets.delete(fallback);
+                migrations.set(fallback, connector);
+            }
+
+            if (migrations.size && this._trees) {
+                const migratedTrees = new Map();
+
+                for (const [key, tree] of this._trees) {
+                    const parsed = parseTreeKey(key);
+                    const connector = migrations.get(parsed.connector) ?? parsed.connector;
+
+                    migratedTrees.set(treeKey(parsed.workspaceIndex, connector), tree);
+                }
+
+                this._trees = migratedTrees;
+            }
+
+            this._monitorConnectors = connectors;
+            this._normalizeMonitorWorkspaceOffsets();
+            this._queueRetileAll();
+        });
+    }
+
+
+    _monitorOffset(monitor) {
+        const connector = this._monitorConnector(monitor);
+
+        return this._monitorWorkspaceOffsets?.get(connector) ?? 0;
+    }
+
+    _actualWorkspaceForLocal(monitor, localIndex) {
+        return actualWorkspaceForLocal(
+            localIndex,
+            this._monitorOffset(monitor),
+            this._workspaceCount
+        );
+    }
+
+    _loadMonitorWorkspaceOffsets() {
+        try {
+            const entries = JSON.parse(this._settings.get_string('monitor-workspace-offsets'));
+
+            return new Map(Object.entries(entries).map(([connector, offset]) => [
+                connector,
+                modulo(Number(offset), this._workspaceCount),
+            ]));
+        } catch (_error) {
+            return new Map();
+        }
+    }
+
+    _saveMonitorWorkspaceOffsets() {
+        if (!this._settings || !this._monitorWorkspaceOffsets) return;
+
+        this._settings.set_string(
+            'monitor-workspace-offsets',
+            JSON.stringify(Object.fromEntries(this._monitorWorkspaceOffsets))
+        );
+    }
+
+    _normalizeMonitorWorkspaceOffsets() {
+        if (!this._monitorWorkspaceOffsets) return;
+
+        for (const [connector, offset] of this._monitorWorkspaceOffsets)
+            this._monitorWorkspaceOffsets.set(
+                connector,
+                modulo(offset, this._workspaceCount)
+            );
+
+        this._saveMonitorWorkspaceOffsets();
+    }
+
+    _onWorkspaceSwitch(from, to) {
+        const fromIndex = typeof from === 'number' ? from : from?.index?.();
+        const toIndex = typeof to === 'number' ? to : to?.index?.();
+
+        if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) {
+            this._retileAll();
+            return;
+        }
+
+        if (this._settings.get_boolean('monitor-local-workspaces'))
+            this._rotateInactiveMonitors(
+                this._activeMonitor(),
+                toIndex - fromIndex
+            );
+
+        this._retileAll();
+    }
+
+    _rotateInactiveMonitors(stationaryMonitor, delta) {
+        if (!delta) return;
+
+        for (let monitor = 0; monitor < global.display.get_n_monitors(); monitor++) {
+            if (monitor !== stationaryMonitor)
+                this._rotateMonitor(monitor, delta, false);
+        }
+
+        this._saveMonitorWorkspaceOffsets();
+    }
+
+    _rotateMonitor(monitor, delta, save = true) {
+        if (!delta || !this._trees || !this._monitorWorkspaceOffsets) return;
+
+        const connector = this._monitorConnector(monitor);
+        const rotatedTrees = new Map();
+
+        for (const [key, tree] of this._trees)
+            rotatedTrees.set(
+                shiftTreeKeyForConnector(
+                    key,
+                    connector,
+                    delta,
+                    this._workspaceCount
+                ),
+                tree
+            );
+
+        this._trees = rotatedTrees;
+
+        const offset = this._monitorWorkspaceOffsets.get(connector) ?? 0;
+        this._monitorWorkspaceOffsets.set(
+            connector,
+            shiftedOffset(offset, delta, this._workspaceCount)
+        );
+
+        const movedWindows = [];
+
+        for (const win of global.display.list_all_windows()) {
+            if (win.get_monitor() !== monitor) continue;
+            if (win.is_on_all_workspaces?.()) continue;
+
+            const workspace = win.get_workspace();
+            if (!workspace) continue;
+
+            const targetIndex = modulo(workspace.index() + delta, this._workspaceCount);
+            const target = global.workspace_manager.get_workspace_by_index(targetIndex);
+            if (!target || target === workspace) continue;
+
+            movedWindows.push(win);
+            this._managedWorkspaceMoves.add(win);
+            win.change_workspace(target);
+        }
+
+        if (movedWindows.length) {
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                for (const win of movedWindows)
+                    this._managedWorkspaceMoves?.delete(win);
+
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+
+        if (save)
+            this._saveMonitorWorkspaceOffsets();
+    }
+
+    _onMonitorsChanged() {
+        this._refreshMonitorConnectors();
     }
 
     _toggleTiling() {
@@ -1016,7 +1387,12 @@ export default class TilingExtension extends Extension {
         if (target < 0) return;
 
         this._removeFromTree(win);
+        this._managedMonitorMoves.add(win);
         win.move_to_monitor(target);
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._managedMonitorMoves?.delete(win);
+            return GLib.SOURCE_REMOVE;
+        });
         // move_to_monitor solo conserva el desplazamiento en pixeles y no
         // redimensiona: una ventana mas ancha/alta que el monitor destino
         // (p.ej. una ventana tiled que pasa a un monitor rotado y estrecho)
@@ -1273,6 +1649,7 @@ export default class TilingExtension extends Extension {
         const ids = [];
         ids.push(win.connect('unmanaged', () => this._onWindowUnmanaged(win)));
         ids.push(win.connect('workspace-changed', () => this._onWindowWorkspaceChanged(win)));
+        ids.push(win.connect('notify::monitor', () => this._onWindowMonitorChanged(win)));
         this._windowSignals.set(win, ids);
     }
 
@@ -1293,6 +1670,17 @@ export default class TilingExtension extends Extension {
     }
 
     _onWindowWorkspaceChanged(win) {
+        if (this._managedWorkspaceMoves?.delete(win)) return;
+
+        this._removeFromTree(win);
+        if (this._isTileable(win))
+            this._addToTree(win, null);
+        this._queueRetileAll();
+    }
+
+    _onWindowMonitorChanged(win) {
+        if (this._managedMonitorMoves?.delete(win)) return;
+
         this._removeFromTree(win);
         if (this._isTileable(win))
             this._addToTree(win, null);
@@ -1373,7 +1761,7 @@ export default class TilingExtension extends Extension {
     // dir 'h' = horizontal line, splits area top/bottom
 
     _treeKey(workspace, monitor) {
-        return `${workspace.index()}:${monitor}`;
+        return treeKey(workspace.index(), this._monitorConnector(monitor));
     }
 
     _innerArea(workArea) {
@@ -1503,13 +1891,270 @@ export default class TilingExtension extends Extension {
         this._applyTreeLayout(node.b, bRect);
     }
 
+    _windowAnimationAllowed(win, setting = 'animations-enabled') {
+        if (!this._animationsReady || this._workspaceSwitching) return false;
+        if (!this._settings?.get_boolean(setting)) return false;
+        if (!win || win.fullscreen || win.minimized) return false;
+
+        const wmClass = (win.get_wm_class() || '').toLowerCase();
+        const wmClassInstance = (win.get_wm_class_instance() || '').toLowerCase();
+
+        return !this._animationDisabledClasses?.has(wmClass)
+            && !this._animationDisabledClasses?.has(wmClassInstance);
+    }
+
+    _visualFrameRect(win, actor) {
+        const rect = win.get_frame_rect();
+
+        if (!actor || !this._animatedActors?.has(actor))
+            return {x: rect.x, y: rect.y, width: rect.width, height: rect.height};
+
+        return {
+            x: rect.x + actor.translation_x,
+            y: rect.y + actor.translation_y,
+            width: rect.width * actor.scale_x,
+            height: rect.height * actor.scale_y,
+        };
+    }
+
+    _resetActorAnimation(actor, restoreOpacity = true) {
+        if (!actor) return;
+
+        const sourceId = this._pendingWindowAnimations?.get(actor);
+        const tracked = Boolean(sourceId) || this._animatedActors?.has(actor);
+        if (!tracked) return;
+        if (sourceId) {
+            try { laterRemove(sourceId); } catch (_error) {}
+            this._pendingWindowAnimations.delete(actor);
+        }
+
+        try {
+            actor.remove_all_transitions();
+            actor.set_translation(0, 0, 0);
+            actor.set_scale(1, 1);
+            if (restoreOpacity) actor.opacity = 255;
+        } catch (_error) {}
+
+        this._animatedActors?.delete(actor);
+    }
+
+    _queueWindowAnimation(win, actor, from, to) {
+        if (!this._windowAnimationAllowed(win)) return;
+        if (!geometryChanged(from, to)) return;
+
+        const duration = this._settings.get_int('animation-duration-ms');
+        if (duration <= 0) return;
+
+        const transform = flipTransform(from, to);
+        let sourceId = 0;
+
+        this._animatedActors.add(actor);
+        sourceId = laterAdd(Meta.LaterType.BEFORE_REDRAW, () => {
+            this._pendingWindowAnimations?.delete(actor);
+
+            try {
+                if (!actor.get_parent()) {
+                    this._animatedActors?.delete(actor);
+                    return;
+                }
+
+                actor.set_pivot_point(0, 0);
+                actor.set_translation(
+                    transform.translationX,
+                    transform.translationY,
+                    0
+                );
+                actor.set_scale(transform.scaleX, transform.scaleY);
+                actor.ease({
+                    translation_x: 0,
+                    translation_y: 0,
+                    scale_x: 1,
+                    scale_y: 1,
+                    duration,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    onComplete: () => {
+                        this._animatedActors?.delete(actor);
+                    },
+                });
+            } catch (_error) {
+                this._resetActorAnimation(actor);
+            }
+        });
+        this._pendingWindowAnimations.set(actor, sourceId);
+    }
+
+    _prepareWorkspaceTransition(monitor, targetWorkspace, direction) {
+        if (!this._animationsReady) return null;
+        if (!this._settings.get_boolean('workspace-animations-enabled')) return null;
+
+        const duration = this._settings.get_int('workspace-animation-duration-ms');
+        if (duration <= 0 || !targetWorkspace) return null;
+
+        const monitorGeometry = global.display.get_monitor_geometry(monitor);
+        const activeWorkspace = global.workspace_manager.get_active_workspace();
+        const outgoingActors = activeWorkspace.list_windows()
+            .filter(win =>
+                win.get_monitor() === monitor
+                && this._windowAnimationAllowed(win, 'workspace-animations-enabled')
+            )
+            .map(win => win.get_compositor_private())
+            .filter(Boolean);
+        const incomingActors = targetWorkspace.list_windows()
+            .filter(win =>
+                win.get_monitor() === monitor
+                && this._windowAnimationAllowed(win, 'workspace-animations-enabled')
+            )
+            .map(win => win.get_compositor_private())
+            .filter(Boolean);
+
+        if (!outgoingActors.length && !incomingActors.length)
+            return null;
+
+        const container = new Clutter.Actor({
+            x: monitorGeometry.x,
+            y: monitorGeometry.y,
+            width: monitorGeometry.width,
+            height: monitorGeometry.height,
+            clip_to_allocation: true,
+            reactive: false,
+        });
+
+        global.window_group.add_child(container);
+        this._workspaceCloneContainers.add(container);
+
+        for (const actor of outgoingActors) {
+            this._resetActorAnimation(actor);
+
+            const [x, y] = actor.get_transformed_position();
+            const [width, height] = actor.get_transformed_size();
+            const clone = new Clutter.Clone({
+                source: actor,
+                x: x - monitorGeometry.x,
+                y: y - monitorGeometry.y,
+                width,
+                height,
+                reactive: false,
+            });
+
+            container.add_child(clone);
+        }
+
+        for (const actor of incomingActors) {
+            this._resetActorAnimation(actor);
+            actor.opacity = 0;
+            this._animatedActors.add(actor);
+        }
+
+        return {
+            container,
+            direction,
+            duration,
+            incomingActors,
+            distance: Math.round(monitorGeometry.width * 0.18),
+        };
+    }
+
+    _runWorkspaceTransition(transition) {
+        if (!transition) return;
+
+        const {
+            container,
+            direction,
+            duration,
+            incomingActors,
+            distance,
+        } = transition;
+        let sourceId = 0;
+
+        sourceId = laterAdd(Meta.LaterType.BEFORE_REDRAW, () => {
+            this._workspaceAnimationSources?.delete(sourceId);
+
+            try {
+                container.ease({
+                    translation_x: -direction * distance,
+                    opacity: 0,
+                    duration,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    onComplete: () => {
+                        this._workspaceCloneContainers?.delete(container);
+                        container.destroy();
+                    },
+                });
+
+                for (const actor of incomingActors) {
+                    if (!actor.get_parent()) {
+                        this._animatedActors?.delete(actor);
+                        continue;
+                    }
+
+                    actor.set_translation(direction * distance, 0, 0);
+                    actor.ease({
+                        translation_x: 0,
+                        opacity: 255,
+                        duration,
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                        onComplete: () => {
+                            this._animatedActors?.delete(actor);
+                        },
+                    });
+                }
+            } catch (_error) {
+                this._workspaceCloneContainers?.delete(container);
+                try { container.destroy(); } catch (_destroyError) {}
+
+                for (const actor of incomingActors)
+                    this._resetActorAnimation(actor);
+            }
+        });
+        this._workspaceAnimationSources.add(sourceId);
+    }
+
+    _cleanupAnimations() {
+        if (this._animationReadySourceId) {
+            GLib.source_remove(this._animationReadySourceId);
+            this._animationReadySourceId = 0;
+        }
+
+        for (const sourceId of (this._pendingWindowAnimations?.values() ?? [])) {
+            try { laterRemove(sourceId); } catch (_error) {}
+        }
+        this._pendingWindowAnimations?.clear();
+
+        for (const sourceId of (this._workspaceAnimationSources ?? [])) {
+            try { laterRemove(sourceId); } catch (_error) {}
+        }
+        this._workspaceAnimationSources?.clear();
+
+        for (const actor of (this._animatedActors ?? []))
+            this._resetActorAnimation(actor);
+        this._animatedActors?.clear();
+
+        for (const container of (this._workspaceCloneContainers ?? [])) {
+            try { container.destroy(); } catch (_error) {}
+        }
+        this._workspaceCloneContainers?.clear();
+
+        this._animationsReady = false;
+        this._pendingWindowAnimations = null;
+        this._workspaceAnimationSources = null;
+        this._animatedActors = null;
+        this._workspaceCloneContainers = null;
+    }
+
     _placeWindow(win, rect) {
         try {
+            const actor = win.get_compositor_private();
+            const from = this._visualFrameRect(win, actor);
+
+            this._resetActorAnimation(actor);
+
             if (win.maximized_horizontally || win.maximized_vertically)
                 win.unmaximize();
+
             win.move_resize_frame(false, rect.x, rect.y, rect.width, rect.height);
-        } catch (e) {
-            console.error(`[tiling] _placeWindow failed for ${win.get_wm_class()}: ${e}`);
+            this._queueWindowAnimation(win, actor, from, rect);
+        } catch (error) {
+            console.error(`[tiling] _placeWindow failed for ${win.get_wm_class()}: ${error}`);
         }
     }
 

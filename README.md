@@ -1,4 +1,4 @@
-# Tiling Dakhil Manager
+# Dwindle for GNOME
 
 A focused GNOME Shell tiling extension for GNOME 48–50, built because Pop Shell, Forge, and friends lag behind new GNOME releases. Inspired by Hyprland (default dwindle layout) and i3 (keybinding ergonomics).
 
@@ -55,7 +55,7 @@ Defaults below. Every binding can be reassigned in **Prefs → Atajos** (click a
 | `Super+I` | Show WM_CLASS of focused window (notification + log) |
 | `Super+F1` / `Super+/` | Show/hide the help overlay |
 
-All bindings are stored under `org.gnome.shell.extensions.tiling-dakhil-manager`. The prefs editor writes the same keys, and changes apply live (no re-enable needed) because the bindings watch their GSettings keys.
+All bindings are stored under `org.gnome.shell.extensions.dwindle`. The prefs editor writes the same keys, and changes apply live (no re-enable needed) because the bindings watch their GSettings keys.
 
 ## Install
 
@@ -67,11 +67,11 @@ make install
 make enable
 ```
 
-`make install` symlinks this directory into `~/.local/share/gnome-shell/extensions/tiling-dakhil-manager@georgedakhil` so further edits go live on the next session.
+`make install` symlinks this directory into `~/.local/share/gnome-shell/extensions/dwindle@taylorbeeston` so further edits go live on the next session.
 
 ## Configure
 
-Open `Extensions` → `Tiling Dakhil Manager` → gear. The prefs window is split into tabs:
+Open `Extensions` → `Dwindle` → gear. The prefs window is split into tabs:
 
 - **General** — workspace count (1–9), auto-tiling, strict mode, disable-native toggle, gap size, resize step (px), and the focus border (enabled / width / hex color).
 - **Barra** — spacing between panel indicators, the "show focused app" indicator toggle, and a per-indicator list to set position (default / left / center / right / hidden) and reorder within each side.
@@ -79,7 +79,7 @@ Open `Extensions` → `Tiling Dakhil Manager` → gear. The prefs window is spli
 - **Flotantes** — search-filtered checkbox list of installed apps that should open floating, plus manual WM_CLASS entries.
 - **Atajos** — GNOME-style keybinding editor: action on the left, current shortcut on the right, pencil/row click to rebind.
 
-Anything not surfaced in the UI can still be edited with `dconf-editor` under `/org/gnome/shell/extensions/tiling-dakhil-manager/`.
+Anything not surfaced in the UI can still be edited with `dconf-editor` under `/org/gnome/shell/extensions/dwindle/`.
 
 ## Limitations
 
@@ -107,4 +107,4 @@ MIT. See [LICENSE](./LICENSE).
 
 ## Credits
 
-Author: George Dakhil
+Original author: George Dakhil. Fork maintained by Taylor Beeston.

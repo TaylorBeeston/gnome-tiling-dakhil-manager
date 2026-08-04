@@ -30,14 +30,21 @@ export default class TilingPreferences extends ExtensionPreferences {
 
         const countRow = new Adw.SpinRow({
             title: 'Numero de workspaces',
-            subtitle: 'Workspaces fijos (1-9). Cambiar este valor actualiza num-workspaces al instante, pero para que se actualicen los atajos Super+N hay que desactivar y reactivar la extension.',
+            subtitle: 'Workspaces fijos (1-10). Cambiar este valor actualiza num-workspaces al instante, pero para que se actualicen los atajos Super+N hay que desactivar y reactivar la extension.',
             adjustment: new Gtk.Adjustment({
-                lower: 1, upper: 9, step_increment: 1, page_increment: 1,
+                lower: 1, upper: 10, step_increment: 1, page_increment: 1,
             }),
         });
         settings.bind('workspace-count', countRow, 'value',
             Gio.SettingsBindFlags.DEFAULT);
         general.add(countRow);
+        const localWorkspacesRow = new Adw.SwitchRow({
+            title: 'Workspaces locales por monitor',
+            subtitle: 'Super+N cambia solamente el monitor que tiene el foco. Cada monitor conserva su propio workspace 1-10.',
+        });
+        settings.bind('monitor-local-workspaces', localWorkspacesRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        general.add(localWorkspacesRow);
 
         const enabledRow = new Adw.SwitchRow({
             title: 'Tiling automatico',
@@ -128,6 +135,66 @@ export default class TilingPreferences extends ExtensionPreferences {
         settings.bind('resize-step-px', resizeStepRow, 'value',
             Gio.SettingsBindFlags.DEFAULT);
         general.add(resizeStepRow);
+        const animationGroup = new Adw.PreferencesGroup({
+            title: 'Animaciones',
+        });
+        generalPage.add(animationGroup);
+
+        const animationsEnabledRow = new Adw.SwitchRow({
+            title: 'Animar mosaico',
+            subtitle: 'Suaviza aperturas, cierres, swaps y cambios de tamano.',
+        });
+        settings.bind('animations-enabled', animationsEnabledRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        animationGroup.add(animationsEnabledRow);
+
+        const animationDurationRow = new Adw.SpinRow({
+            title: 'Duracion del mosaico (ms)',
+            adjustment: new Gtk.Adjustment({
+                lower: 0, upper: 1000, step_increment: 10, page_increment: 50,
+            }),
+        });
+        settings.bind('animation-duration-ms', animationDurationRow, 'value',
+            Gio.SettingsBindFlags.DEFAULT);
+        animationGroup.add(animationDurationRow);
+
+        const workspaceAnimationsRow = new Adw.SwitchRow({
+            title: 'Animar workspaces locales',
+            subtitle: 'Desliza solamente el monitor que cambia de workspace.',
+        });
+        settings.bind('workspace-animations-enabled', workspaceAnimationsRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        animationGroup.add(workspaceAnimationsRow);
+
+        const workspaceAnimationDurationRow = new Adw.SpinRow({
+            title: 'Duracion de workspace (ms)',
+            adjustment: new Gtk.Adjustment({
+                lower: 0, upper: 1000, step_increment: 10, page_increment: 50,
+            }),
+        });
+        settings.bind(
+            'workspace-animation-duration-ms',
+            workspaceAnimationDurationRow,
+            'value',
+            Gio.SettingsBindFlags.DEFAULT
+        );
+        animationGroup.add(workspaceAnimationDurationRow);
+
+        const animationExclusionsRow = new Adw.EntryRow({
+            title: 'Apps sin animacion',
+            text: settings.get_strv('animation-disabled-classes').join(', '),
+        });
+        animationExclusionsRow.connect('changed', () => {
+            settings.set_strv(
+                'animation-disabled-classes',
+                animationExclusionsRow.text
+                    .split(',')
+                    .map(value => value.trim())
+                    .filter(Boolean)
+            );
+        });
+        animationGroup.add(animationExclusionsRow);
+
 
         const terminalGroup = new Adw.PreferencesGroup({
             title: 'Terminal',
@@ -196,7 +263,7 @@ export default class TilingPreferences extends ExtensionPreferences {
 
         const floatGroup = new Adw.PreferencesGroup({
             title: 'Aplicaciones flotantes',
-            description: 'Marca las apps que quieres que abran en modo flotante. Si no aparece tu app o quieres agregar un WM_CLASS manual, usa dconf-editor en /org/gnome/shell/extensions/tiling-dakhil-manager/. Tambien puedes alternar al vuelo con Super+V.',
+            description: 'Marca las apps que quieres que abran en modo flotante. Si no aparece tu app o quieres agregar un WM_CLASS manual, usa dconf-editor en /org/gnome/shell/extensions/dwindle/. Tambien puedes alternar al vuelo con Super+V.',
         });
         floatPage.add(floatGroup);
 
@@ -496,14 +563,22 @@ export default class TilingPreferences extends ExtensionPreferences {
                 makeShortcutRow(group, key, title);
         }
 
-        const wsGroup = new Adw.PreferencesGroup({
-            title: 'Mover ventana a workspace',
-            description: 'Cambiar de workspace (Super+N) lo gestiona GNOME de forma nativa y no se edita aqui.',
+        const switchWsGroup = new Adw.PreferencesGroup({
+            title: 'Cambiar workspace local',
+            description: 'Super+N cambia solamente el monitor que tiene el foco.',
         });
-        shortcutsPage.add(wsGroup);
+        shortcutsPage.add(switchWsGroup);
+
+        const moveWsGroup = new Adw.PreferencesGroup({
+            title: 'Mover ventana a workspace local',
+        });
+        shortcutsPage.add(moveWsGroup);
+
         const wsCount = settings.get_int('workspace-count');
-        for (let i = 1; i <= wsCount; i++)
-            makeShortcutRow(wsGroup, `move-window-to-workspace-${i}`, `Mover al workspace ${i}`);
+        for (let i = 1; i <= wsCount; i++) {
+            makeShortcutRow(switchWsGroup, `switch-local-workspace-${i}`, `Cambiar al workspace ${i}`);
+            makeShortcutRow(moveWsGroup, `move-window-to-workspace-${i}`, `Mover al workspace ${i}`);
+        }
 
         window.connect('close-request', () => {
             for (const id of shortcutChangedIds) {
