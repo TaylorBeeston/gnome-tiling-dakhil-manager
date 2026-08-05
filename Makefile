@@ -52,7 +52,7 @@ status:
 
 pack: build
 	@cd "$(SOURCE_DIR)" && zip -r "$(UUID).zip" \
-		metadata.json extension.js prefs.js animationMath.js workspaceMath.js schemas/ \
+		metadata.json extension.js prefs.js animationMath.js workspaceMath.js secondaryWorkspacePanel.js schemas/ \
 		-x 'schemas/gschemas.compiled' \
 		>/dev/null
 	@echo "Built: $(SOURCE_DIR)/$(UUID).zip"

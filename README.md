@@ -30,6 +30,8 @@ Tested on GNOME 50 / Wayland / Fedora 44.
 - **Native GNOME overrides** — disables `edge-tiling`, `auto-maximize`, the `Super+Arrow` snap bindings, the native move-to-workspace/monitor bindings, and the `Super+F1` system-help binding while enabled; everything is restored on disable.
 - **Top-panel layout control** — reposition *any* panel indicator (left / center / right / hidden), reorder within each side, and adjust spacing between indicators — all from the prefs UI, no custom indicators required.
 - **Focused-app indicator** — optional panel item showing the name of the currently focused app; positionable and orderable like any other indicator.
+- **Secondary workspace bar** — `Meta-0` gets its own top bar with clickable local workspace buttons and an active-workspace highlight.
+- **Slurp-style screenshots** — `Print` immediately selects a region and opens it in Swappy, without GNOME's full screenshot UI.
 - **Help overlay** — `Super+F1` (or `Super+/`) opens a searchable, GNOME-styled cheat sheet listing every action with its *current* shortcut (reflects rebindings live).
 - **Live prefs UI** (libadwaita) — organized into tabs: General, Barra (panel), Terminal, Flotantes (floating apps), and Atajos (keybinding editor).
 - **Discovery** — `Super+I` shows the WM_CLASS of the focused window so you can configure new floating apps without guessing.
@@ -54,6 +56,7 @@ Defaults below. Every binding can be reassigned in **Prefs → Atajos** (click a
 | `Super+B` | Toggle decoration (SSD only — see Limitations) |
 | `Super+I` | Show WM_CLASS of focused window (notification + log) |
 | `Super+F1` / `Super+/` | Show/hide the help overlay |
+| `Print` | Drag-select a region and open it in Swappy |
 
 All bindings are stored under `org.gnome.shell.extensions.dwindle`. The prefs editor writes the same keys, and changes apply live (no re-enable needed) because the bindings watch their GSettings keys.
 
@@ -74,7 +77,7 @@ make enable
 Open `Extensions` → `Dwindle` → gear. The prefs window is split into tabs:
 
 - **General** — workspace count (1–9), auto-tiling, strict mode, disable-native toggle, gap size, resize step (px), and the focus border (enabled / width / hex color).
-- **Barra** — spacing between panel indicators, the "show focused app" indicator toggle, and a per-indicator list to set position (default / left / center / right / hidden) and reorder within each side.
+- **Barra** — spacing between panel indicators, the "show focused app" indicator toggle, a clickable local-workspace bar on `Meta-0`, and a per-indicator list to set position (default / left / center / right / hidden) and reorder within each side.
 - **Terminal** — the command run by `Super+Enter`, plus a list of detected terminals you can pick from.
 - **Flotantes** — search-filtered checkbox list of installed apps that should open floating, plus manual WM_CLASS entries.
 - **Atajos** — GNOME-style keybinding editor: action on the left, current shortcut on the right, pencil/row click to rebind.

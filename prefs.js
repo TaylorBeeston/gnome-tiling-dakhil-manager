@@ -545,6 +545,7 @@ export default class TilingPreferences extends ExtensionPreferences {
             ]],
             ['Acciones', [
                 ['open-terminal', 'Abrir terminal'],
+                ['screenshot-region', 'Capturar region en Swappy'],
                 ['toggle-monocle', 'Monoculo (ver solo la ventana con foco)'],
                 ['toggle-tiling', 'Activar/desactivar tiling'],
                 ['toggle-floating', 'Alternar tiled/floating'],

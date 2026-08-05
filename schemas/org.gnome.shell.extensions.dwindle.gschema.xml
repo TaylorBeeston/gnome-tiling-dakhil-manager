@@ -277,6 +277,11 @@
       <default><![CDATA[['<Super>Return']]]></default>
       <summary>Abrir terminal (Super+Enter)</summary>
     </key>
+    <key name="screenshot-region" type="as">
+      <default><![CDATA[['Print']]]></default>
+      <summary>Seleccionar una region y abrir la captura en Swappy</summary>
+    </key>
+
     <key name="terminal-command" type="s">
       <default>'ghostty'</default>
       <summary>Comando ejecutado por Super+Enter. Ejemplos: ghostty, kgx, gnome-terminal, alacritty, kitty, foot, konsole, xterm, ptyxis --new-window</summary>

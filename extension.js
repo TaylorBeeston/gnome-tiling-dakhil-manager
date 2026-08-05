@@ -7,11 +7,14 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import {SelectArea} from 'resource:///org/gnome/shell/ui/screenshot.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import {flipTransform, geometryChanged} from './animationMath.js';
+import {SecondaryWorkspacePanel} from './secondaryWorkspacePanel.js';
 import {
     actualWorkspaceForLocal,
     modulo,
+    parseTreeKey,
     shiftedOffset,
     shiftTreeKeyForConnector,
     treeKey,
@@ -22,6 +25,7 @@ const MAX_WORKSPACES = 10;
 const NATIVE_WM_SCHEMA = 'org.gnome.desktop.wm.keybindings';
 const NATIVE_SHELL_SCHEMA = 'org.gnome.shell.keybindings';
 const NATIVE_PREFS_SCHEMA = 'org.gnome.desktop.wm.preferences';
+const SECONDARY_PANEL_CONNECTORS = new Set(['Meta-0']);
 const DisplayConfigProxy = Gio.DBusProxy.makeProxyWrapper(`
 <node>
   <interface name="org.gnome.Mutter.DisplayConfig">
@@ -68,6 +72,9 @@ export default class TilingExtension extends Extension {
             Math.min(MAX_WORKSPACES, this._settings.get_int('workspace-count')));
         this._monitorWorkspaceOffsets = this._loadMonitorWorkspaceOffsets();
         this._monitorConnectors = new Map();
+        this._secondaryWorkspacePanels = new Map();
+        this._screenshotInProgress = false;
+        this._screenshotSelector = null;
         this._displayConfigProxy = new DisplayConfigProxy(
             Gio.DBus.session,
             'org.gnome.Mutter.DisplayConfig',
@@ -98,6 +105,7 @@ export default class TilingExtension extends Extension {
         this._installWorkspaceCount();
         this._installNativeWorkspaceBindings();
         this._installNativeWindowOverrides();
+        this._installNativeScreenshotBinding();
         this._installFocusFollowsMouse();
         this._installPanelLayout();
 
@@ -137,6 +145,7 @@ export default class TilingExtension extends Extension {
         this._addKeybinding('window-to-monitor-down', () => this._moveToMonitor('down'));
         this._addKeybinding('toggle-monocle', () => this._toggleMonocle());
         this._addKeybinding('open-terminal', () => this._openTerminal());
+        this._addKeybinding('screenshot-region', () => this._captureRegionScreenshot());
 
         this._gapChangedId = this._settings.connect('changed::gap-size',
             () => this._retileAll());
@@ -161,6 +170,7 @@ export default class TilingExtension extends Extension {
                 this._wmPrefsSettings.set_int('num-workspaces', newCount);
             this._workspaceCount = newCount;
             this._normalizeMonitorWorkspaceOffsets();
+            this._refreshSecondaryWorkspacePanels();
             Main.notify('Dwindle',
                 `Workspaces: ${newCount}. Disable and re-enable the extension to refresh Super+N bindings.`);
         });
@@ -207,9 +217,11 @@ export default class TilingExtension extends Extension {
         this._floatNextWindow = false;
         this._hideFloatNextIndicator();
         this._uninstallFocusBorder();
+        this._destroySecondaryWorkspacePanels();
         this._uninstallPanelLayout();
         this._uninstallFocusFollowsMouse();
         this._uninstallNativeWindowOverrides();
+        this._uninstallNativeScreenshotBinding();
         this._uninstallNativeWorkspaceBindings();
         this._uninstallWorkspaceCount();
 
@@ -280,6 +292,9 @@ export default class TilingExtension extends Extension {
         this._monitorWorkspaceOffsets = null;
         this._displayConfigProxy = null;
         this._monitorConnectors = null;
+        this._secondaryWorkspacePanels = null;
+        this._screenshotSelector = null;
+        this._screenshotInProgress = false;
         this._animationDisabledClasses = null;
 
         if (this._windowSignals) {
@@ -304,6 +319,80 @@ export default class TilingExtension extends Extension {
         );
         this._keybindings.push(name);
     }
+    _installNativeScreenshotBinding() {
+        if (!this._shellSettings) return;
+
+        this._savedScreenshotUiBinding =
+            this._shellSettings.get_strv('show-screenshot-ui');
+        this._shellSettings.set_strv('show-screenshot-ui', []);
+    }
+
+    _uninstallNativeScreenshotBinding() {
+        if (this._shellSettings && this._savedScreenshotUiBinding)
+            this._shellSettings.set_strv(
+                'show-screenshot-ui',
+                this._savedScreenshotUiBinding
+            );
+
+        this._savedScreenshotUiBinding = null;
+    }
+
+    async _captureRegionScreenshot() {
+        if (this._screenshotInProgress) return;
+
+        this._screenshotInProgress = true;
+
+        let area;
+
+        try {
+            this._screenshotSelector = new SelectArea();
+            area = await this._screenshotSelector.selectAsync();
+        } catch (_error) {
+            return;
+        } finally {
+            this._screenshotSelector = null;
+            this._screenshotInProgress = false;
+        }
+
+        const file = Gio.File.new_for_path(
+            `${GLib.get_tmp_dir()}/dwindle-screenshot-${GLib.get_real_time()}.png`
+        );
+        const stream = file.replace(
+            null,
+            false,
+            Gio.FileCreateFlags.REPLACE_DESTINATION,
+            null
+        );
+
+        try {
+            const screenshot = new Shell.Screenshot();
+
+            await screenshot.screenshot_area(
+                Math.round(area.x),
+                Math.round(area.y),
+                Math.max(1, Math.round(area.width)),
+                Math.max(1, Math.round(area.height)),
+                stream
+            );
+            stream.close(null);
+
+            const process = Gio.Subprocess.new(
+                ['swappy', '-f', file.get_path()],
+                Gio.SubprocessFlags.NONE
+            );
+
+            process.wait_async(null, (_process, result) => {
+                try { process.wait_finish(result); } catch (_error) {}
+                file.delete_async(GLib.PRIORITY_DEFAULT, null, null);
+            });
+        } catch (error) {
+            try { stream.close(null); } catch (_closeError) {}
+            try { file.delete(null); } catch (_deleteError) {}
+            console.error(`[Dwindle] Region screenshot failed: ${error}`);
+            Main.notify('Dwindle', 'No se pudo abrir la captura en Swappy');
+        }
+    }
+
 
     _installWorkspaceCount() {
         this._wmPrefsSettings = new Gio.Settings({schema_id: NATIVE_PREFS_SCHEMA});
@@ -693,8 +782,10 @@ export default class TilingExtension extends Extension {
         this._switchLocalWorkspace(localIndex, win);
     }
 
-    _switchLocalWorkspace(localIndex, focusWindow = null) {
-        const monitor = focusWindow?.get_monitor() ?? this._activeMonitor();
+    _switchLocalWorkspace(localIndex, focusWindow = null, monitorOverride = null) {
+        const monitor = monitorOverride
+            ?? focusWindow?.get_monitor()
+            ?? this._activeMonitor();
 
         if (!this._settings.get_boolean('monitor-local-workspaces')) {
             const target = global.workspace_manager.get_workspace_by_index(localIndex);
@@ -810,11 +901,62 @@ export default class TilingExtension extends Extension {
             }
 
             this._monitorConnectors = connectors;
+            this._refreshSecondaryWorkspacePanels();
             this._normalizeMonitorWorkspaceOffsets();
             this._queueRetileAll();
         });
     }
 
+    _refreshSecondaryWorkspacePanels() {
+        this._destroySecondaryWorkspacePanels();
+
+        if (!this._secondaryWorkspacePanels || !this._monitorConnectors) return;
+
+        for (const [monitor, connector] of this._monitorConnectors) {
+            if (!SECONDARY_PANEL_CONNECTORS.has(connector)) continue;
+
+            const geometry = Main.layoutManager.monitors[monitor];
+
+            if (!geometry) continue;
+
+            const panel = new SecondaryWorkspacePanel(
+                geometry,
+                connector,
+                this._workspaceCount,
+                localIndex => this._switchLocalWorkspace(
+                    localIndex,
+                    null,
+                    monitor
+                )
+            );
+
+            this._secondaryWorkspacePanels.set(connector, {monitor, panel});
+        }
+
+        this._updateSecondaryWorkspacePanels();
+    }
+
+    _updateSecondaryWorkspacePanels() {
+        if (!this._secondaryWorkspacePanels) return;
+
+        const activeWorkspace =
+            global.workspace_manager.get_active_workspace_index();
+
+        for (const {monitor, panel} of this._secondaryWorkspacePanels.values())
+            panel.update(modulo(
+                activeWorkspace - this._monitorOffset(monitor),
+                this._workspaceCount
+            ));
+    }
+
+    _destroySecondaryWorkspacePanels() {
+        if (!this._secondaryWorkspacePanels) return;
+
+        for (const {panel} of this._secondaryWorkspacePanels.values())
+            panel.destroy();
+
+        this._secondaryWorkspacePanels.clear();
+    }
 
     _monitorOffset(monitor) {
         const connector = this._monitorConnector(monitor);
@@ -850,6 +992,7 @@ export default class TilingExtension extends Extension {
             'monitor-workspace-offsets',
             JSON.stringify(Object.fromEntries(this._monitorWorkspaceOffsets))
         );
+        this._updateSecondaryWorkspacePanels();
     }
 
     _normalizeMonitorWorkspaceOffsets() {
@@ -870,6 +1013,7 @@ export default class TilingExtension extends Extension {
 
         if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) {
             this._retileAll();
+            this._updateSecondaryWorkspacePanels();
             return;
         }
 
@@ -880,6 +1024,7 @@ export default class TilingExtension extends Extension {
             );
 
         this._retileAll();
+        this._updateSecondaryWorkspacePanels();
     }
 
     _rotateInactiveMonitors(stationaryMonitor, delta) {
@@ -1036,6 +1181,7 @@ export default class TilingExtension extends Extension {
             [dir('resize-left'), 'Redimensionar (px configurables)'],
             [accel('rotate-split'), 'Rotar split (vertical <-> horizontal)'],
             [accel('open-terminal'), 'Abrir terminal'],
+            [accel('screenshot-region'), 'Seleccionar region y abrir en Swappy'],
             [accel('toggle-monocle'), 'Monoculo: ver solo la ventana con foco'],
             [accel('toggle-tiling'), 'Activar/desactivar tiling'],
             [accel('toggle-floating'), 'Alternar ventana tiled/floating'],
