@@ -1,8 +1,9 @@
 # Dwindle for GNOME
 
-A focused GNOME Shell tiling extension for GNOME 48–50, built because Pop Shell, Forge, and friends lag behind new GNOME releases. Inspired by Hyprland (default dwindle layout) and i3 (keybinding ergonomics).
+> [!IMPORTANT]
+> This is Taylor Beeston's personal GNOME configuration, published only as source history and backup. It is tailored to one workstation, including hard-coded `eDP-1` and `Meta-0` behavior. It is not intended as a general-purpose extension, supported product, or upstream alternative; other people should expect to adapt and maintain it themselves.
 
-Tested on GNOME 50 / Wayland / Fedora 44.
+The extension combines a Hyprland-style dwindle layout with Taylor's monitor-local workspaces, shortcuts, panel layout, and WayVR integration.
 
 ## Demo
 
@@ -43,7 +44,7 @@ Defaults below. Every binding can be reassigned in **Prefs → Atajos** (click a
 | Shortcut | Action |
 |---|---|
 | `Super+1..N` | Switch to workspace N (native GNOME) |
-| `Super+Shift+1..N` | Move active window to workspace N and follow it |
+| `Super+Shift+1..N` | Move active window to workspace N without switching workspaces |
 | `Super+Left/Right/Up/Down` | Focus the window in that direction |
 | `Super+Shift+Left/Right/Up/Down` | Swap the focused window with its neighbor |
 | `Super+Shift+Ctrl+Left/Right/Up/Down` | Move the focused window to the monitor in that direction |
@@ -66,11 +67,11 @@ All bindings are stored under `org.gnome.shell.extensions.dwindle`. The prefs ed
 git clone <repo> ~/Personal/tiling-extension
 cd ~/Personal/tiling-extension
 make install
-# Log out and back in (required on Wayland)
+# Log out and back in once so GNOME loads the reloadable entry point
 make enable
 ```
 
-`make install` symlinks this directory into `~/.local/share/gnome-shell/extensions/dwindle@taylorbeeston` so further edits go live on the next session.
+`make install` symlinks this directory into `~/.local/share/gnome-shell/extensions/dwindle@taylorbeeston`. The first install, and edits to the stable `extension.js` loader itself, require logout/login. Normal development in `runtime.js` and its helper modules uses `make reload` without ending the Wayland session.
 
 ## Configure
 
@@ -86,7 +87,7 @@ Anything not surfaced in the UI can still be edited with `dconf-editor` under `/
 
 ## Limitations
 
-- **Wayland requires logout/login per `extension.js` edit**. GJS caches imported modules; `gnome-extensions disable && enable` does not reload `extension.js` from disk on Wayland. Iterate accordingly. (`prefs.js` is re-read every time the prefs window opens — no logout needed.)
+- **The stable loader needs one initial logout/login**. After GNOME loads it, `make reload` recompiles schemas, disables the current runtime cleanly, and imports fresh cache-busted copies of `runtime.js` and its helper modules without ending the Wayland session. Editing the loader in `extension.js` itself still requires logout/login. `prefs.js` is re-read whenever preferences opens.
 - **Strict mode is snap-back, not lock**. The extension is a compositor extension, not the WM, so it can't prevent a drag — only reapply geometry on `grab-op-end`. For true locking use Hyprland or Sway.
 - **`Super+B` decoration toggle does nothing for CSD apps**. GTK / libadwaita apps draw their own titlebar inside the window content; only the app can hide it. The toggle works for SSD apps (xterm and similar); the extension shows a notification when it can't.
 - **`StartupWMClass` in `.desktop` files is sometimes wrong**. Some apps report a different runtime WM_CLASS than the desktop file declares (e.g. Proton VPN — desktop says `protonvpn-app`, runtime says `proton.vpn.app.gtk`). Use `Super+I` to find the real value, then add it via Prefs → Flotantes → Entradas manuales.
@@ -97,12 +98,13 @@ Anything not surfaced in the UI can still be edited with `dconf-editor` under `/
 ```bash
 make build      # recompile schemas after editing the XML
 make reinstall  # remove old symlink and re-link
+make reload     # hot-reload runtime/helper/schema changes without logout
 make pack       # build a zip suitable for extensions.gnome.org
 make status     # show extension info / enabled state
 make clean      # remove build artifacts
 ```
 
-After `make install`, edits to `extension.js` / `prefs.js` / `schemas/*.xml` are live on the next GNOME Shell session (after logout/login on Wayland). Changes to `prefs.js` are picked up each time the prefs window is opened — no logout needed.
+After the initial `make install` and one logout/login, use `make reload` for edits to `runtime.js`, `animationMath.js`, `workspaceMath.js`, `secondaryWorkspacePanel.js`, and `schemas/*.xml`. GNOME keeps `extension.js` cached, so changes to that small stable loader still need logout/login. `prefs.js` is picked up each time the preferences window opens.
 
 ## License
 

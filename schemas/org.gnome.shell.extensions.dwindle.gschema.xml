@@ -46,43 +46,43 @@
 
     <key name="move-window-to-workspace-1" type="as">
       <default><![CDATA[['<Super><Shift>1']]]></default>
-      <summary>Mover ventana al workspace 1 y seguirla</summary>
+      <summary>Mover ventana al workspace 1 sin cambiar de workspace</summary>
     </key>
     <key name="move-window-to-workspace-2" type="as">
       <default><![CDATA[['<Super><Shift>2']]]></default>
-      <summary>Mover ventana al workspace 2 y seguirla</summary>
+      <summary>Mover ventana al workspace 2 sin cambiar de workspace</summary>
     </key>
     <key name="move-window-to-workspace-3" type="as">
       <default><![CDATA[['<Super><Shift>3']]]></default>
-      <summary>Mover ventana al workspace 3 y seguirla</summary>
+      <summary>Mover ventana al workspace 3 sin cambiar de workspace</summary>
     </key>
     <key name="move-window-to-workspace-4" type="as">
       <default><![CDATA[['<Super><Shift>4']]]></default>
-      <summary>Mover ventana al workspace 4 y seguirla</summary>
+      <summary>Mover ventana al workspace 4 sin cambiar de workspace</summary>
     </key>
     <key name="move-window-to-workspace-5" type="as">
       <default><![CDATA[['<Super><Shift>5']]]></default>
-      <summary>Mover ventana al workspace 5 y seguirla</summary>
+      <summary>Mover ventana al workspace 5 sin cambiar de workspace</summary>
     </key>
     <key name="move-window-to-workspace-6" type="as">
       <default><![CDATA[['<Super><Shift>6']]]></default>
-      <summary>Mover ventana al workspace 6 y seguirla</summary>
+      <summary>Mover ventana al workspace 6 sin cambiar de workspace</summary>
     </key>
     <key name="move-window-to-workspace-7" type="as">
       <default><![CDATA[['<Super><Shift>7']]]></default>
-      <summary>Mover ventana al workspace 7 y seguirla</summary>
+      <summary>Mover ventana al workspace 7 sin cambiar de workspace</summary>
     </key>
     <key name="move-window-to-workspace-8" type="as">
       <default><![CDATA[['<Super><Shift>8']]]></default>
-      <summary>Mover ventana al workspace 8 y seguirla</summary>
+      <summary>Mover ventana al workspace 8 sin cambiar de workspace</summary>
     </key>
     <key name="move-window-to-workspace-9" type="as">
       <default><![CDATA[['<Super><Shift>9']]]></default>
-      <summary>Mover ventana al workspace 9 y seguirla</summary>
+      <summary>Mover ventana al workspace 9 sin cambiar de workspace</summary>
     </key>
     <key name="move-window-to-workspace-10" type="as">
       <default><![CDATA[['<Super><Shift>0']]]></default>
-      <summary>Mover ventana al workspace 10 y seguirla</summary>
+      <summary>Mover ventana al workspace 10 sin cambiar de workspace</summary>
     </key>
 
     <key name="workspace-count" type="i">

@@ -3,7 +3,7 @@ INSTALL_DIR  = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 SOURCE_DIR   = $(CURDIR)
 SCHEMA_DIR   = $(SOURCE_DIR)/schemas
 
-.PHONY: all build install uninstall reinstall enable disable status pack clean help
+.PHONY: all build install uninstall reinstall enable disable reload status pack clean help
 
 all: build
 
@@ -15,6 +15,7 @@ help:
 	@echo "  reinstall  - Uninstall + install"
 	@echo "  enable     - gnome-extensions enable $(UUID)"
 	@echo "  disable    - gnome-extensions disable $(UUID)"
+	@echo "  reload     - Recompile schemas and hot-reload runtime code"
 	@echo "  status     - Show extension info"
 	@echo "  pack       - Build a zip ready for extensions.gnome.org"
 	@echo "  clean      - Remove build artifacts"
@@ -47,12 +48,17 @@ enable:
 disable:
 	@gnome-extensions disable $(UUID)
 
+reload: build
+	@gnome-extensions disable $(UUID)
+	@gnome-extensions enable $(UUID)
+	@gnome-extensions info $(UUID) | grep -E "Name|Enabled|State"
+
 status:
 	@gnome-extensions info $(UUID) 2>/dev/null || echo "Not installed."
 
 pack: build
 	@cd "$(SOURCE_DIR)" && zip -r "$(UUID).zip" \
-		metadata.json extension.js prefs.js animationMath.js workspaceMath.js secondaryWorkspacePanel.js schemas/ \
+		metadata.json extension.js runtime.js prefs.js animationMath.js workspaceMath.js secondaryWorkspacePanel.js schemas/ \
 		-x 'schemas/gschemas.compiled' \
 		>/dev/null
 	@echo "Built: $(SOURCE_DIR)/$(UUID).zip"
