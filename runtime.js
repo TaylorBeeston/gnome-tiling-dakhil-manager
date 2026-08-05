@@ -14,7 +14,7 @@ const reloadSuffix = reloadIndex < 0 ? '' : import.meta.url.slice(reloadIndex);
 console.log(`[Dwindle] Importing runtime ${reloadSuffix || 'without reload token'}`);
 const {flipTransform, geometryChanged} =
     await import(`./animationMath.js${reloadSuffix}`);
-const {SecondaryWorkspacePanel} =
+const {PrimarySystemBar, SecondarySystemBar} =
     await import(`./secondaryWorkspacePanel.js${reloadSuffix}`);
 const {
     actualWorkspaceForLocal,
@@ -78,6 +78,8 @@ export default class TilingExtension extends Extension {
         this._monitorWorkspaceOffsets = this._loadMonitorWorkspaceOffsets();
         this._monitorConnectors = new Map();
         this._secondaryWorkspacePanels = new Map();
+        this._primarySystemBar = null;
+        this._lastFocusedWindowTitle = '';
         this._screenshotInProgress = false;
         this._screenshotSelector = null;
         this._displayConfigProxy = new DisplayConfigProxy(
@@ -175,17 +177,15 @@ export default class TilingExtension extends Extension {
                 this._wmPrefsSettings.set_int('num-workspaces', newCount);
             this._workspaceCount = newCount;
             this._normalizeMonitorWorkspaceOffsets();
-            this._refreshSecondaryWorkspacePanels();
+            this._refreshSystemBars();
             Main.notify('Dwindle',
                 `Workspaces: ${newCount}. Disable and re-enable the extension to refresh Super+N bindings.`);
         });
         this._panelChangedIds = [
             this._settings.connect('changed::panel-spacing',
                 () => this._applyPanelSpacing()),
-            this._settings.connect('changed::panel-show-focused-app', () => {
-                this._uninstallFocusedAppIndicator();
-                this._installFocusedAppIndicator();
-            }),
+            this._settings.connect('changed::panel-show-focused-app',
+                () => this._updateSystemBars()),
         ];
 
         this._windowCreatedId = global.display.connect('window-created',
@@ -298,6 +298,8 @@ export default class TilingExtension extends Extension {
         this._displayConfigProxy = null;
         this._monitorConnectors = null;
         this._secondaryWorkspacePanels = null;
+        this._primarySystemBar = null;
+        this._lastFocusedWindowTitle = null;
         this._screenshotSelector = null;
         this._screenshotInProgress = false;
         this._animationDisabledClasses = null;
@@ -394,7 +396,7 @@ export default class TilingExtension extends Extension {
             try { stream.close(null); } catch (_closeError) {}
             try { file.delete(null); } catch (_deleteError) {}
             console.error(`[Dwindle] Region screenshot failed: ${error}`);
-            Main.notify('Dwindle', 'No se pudo abrir la captura en Swappy');
+            Main.notify('Dwindle', 'Could not open the screenshot in Swappy');
         }
     }
 
@@ -538,55 +540,54 @@ export default class TilingExtension extends Extension {
 
     _installPanelLayout() {
         this._panelBoxOrigStyle = null;
-        this._installFocusedAppIndicator();
+        this._installPrimarySystemBar();
         this._applyPanelSpacing();
     }
 
     _uninstallPanelLayout() {
-        this._uninstallFocusedAppIndicator();
+        this._destroyPrimarySystemBar();
         this._restorePanelSpacing();
     }
 
-    _installFocusedAppIndicator() {
-        if (!this._settings.get_boolean('panel-show-focused-app')) return;
-        if (this._focusedAppButton) return;
+    _installPrimarySystemBar() {
+        if (this._primarySystemBar || !this._settings) return;
 
-        const button = new PanelMenu.Button(0.0, 'TilingFocusedApp', true);
-        this._focusedAppLabel = new St.Label({
-            text: '',
-            y_align: Clutter.ActorAlign.CENTER,
-            style_class: 'tiling-focused-app',
-        });
-        button.add_child(this._focusedAppLabel);
-        Main.panel.addToStatusArea('tilingFocusedApp', button, 1, 'left');
-        this._focusedAppButton = button;
-        this._updateFocusedAppLabel();
+        this._primarySystemBar = new PrimarySystemBar(
+            this._workspaceCount,
+            localIndex => this._switchLocalWorkspace(
+                localIndex,
+                null,
+                Main.layoutManager.primaryIndex
+            ),
+            this._settings.get_int('panel-spacing')
+        );
+        this._updateSystemBars();
     }
 
-    _uninstallFocusedAppIndicator() {
-        if (this._focusedAppButton) {
-            this._focusedAppButton.destroy();
-            this._focusedAppButton = null;
-            this._focusedAppLabel = null;
-        }
+    _destroyPrimarySystemBar() {
+        if (!this._primarySystemBar) return;
+
+        this._primarySystemBar.destroy();
+        this._primarySystemBar = null;
     }
 
-    _updateFocusedAppLabel() {
-        if (!this._focusedAppLabel) return;
+    _focusedWindowTitle() {
         const win = global.display.focus_window;
-        let text = '';
-        if (win) {
-            const tracker = Shell.WindowTracker.get_default();
-            const app = tracker.get_window_app(win);
-            text = (app && app.get_name())
-                || win.get_title() || win.get_wm_class() || '';
-            if (text.length > 40) text = `${text.slice(0, 39)}…`;
-        }
-        this._focusedAppLabel.text = text;
-        if (this._focusedAppButton) {
-            if (text) this._focusedAppButton.show();
-            else this._focusedAppButton.hide();
-        }
+
+        if (!win) return this._lastFocusedWindowTitle || '';
+
+        const tracker = Shell.WindowTracker.get_default();
+        const appName = tracker.get_window_app(win)?.get_name() || '';
+        const title = win.get_title() || '';
+        let text = title && appName
+            && !title.toLowerCase().includes(appName.toLowerCase())
+            ? `${appName} — ${title}`
+            : title || appName || win.get_wm_class() || '';
+
+        if (text.length > 80) text = `${text.slice(0, 79)}…`;
+
+        this._lastFocusedWindowTitle = text;
+        return text;
     }
 
     _panelBoxes() {
@@ -603,6 +604,10 @@ export default class TilingExtension extends Extension {
             if (px < 0) b.set_style(this._panelBoxOrigStyle[i]);
             else b.set_style(`${base} spacing: ${px}px;`);
         });
+        this._primarySystemBar?.setSpacing(px);
+
+        for (const {panel} of this._secondaryWorkspacePanels?.values() || [])
+            panel.setSpacing(px);
     }
 
     _restorePanelSpacing() {
@@ -626,7 +631,7 @@ export default class TilingExtension extends Extension {
         this._focusWindowId = global.display.connect('notify::focus-window', () => {
             this._trackFocusedTileable();
             this._updateFocusBorder();
-            this._updateFocusedAppLabel();
+            this._updateSystemBars();
             this._updateMonocleVisuals();
         });
         this._borderEnabledId = this._settings.connect('changed::focus-border-enabled',
@@ -904,14 +909,16 @@ export default class TilingExtension extends Extension {
             }
 
             this._monitorConnectors = connectors;
-            this._refreshSecondaryWorkspacePanels();
+            this._refreshSystemBars();
             this._normalizeMonitorWorkspaceOffsets();
             this._queueRetileAll();
         });
     }
 
-    _refreshSecondaryWorkspacePanels() {
+    _refreshSystemBars() {
         this._destroySecondaryWorkspacePanels();
+        this._destroyPrimarySystemBar();
+        this._installPrimarySystemBar();
 
         if (!this._secondaryWorkspacePanels || !this._monitorConnectors) return;
 
@@ -922,7 +929,7 @@ export default class TilingExtension extends Extension {
 
             if (!geometry) continue;
 
-            const panel = new SecondaryWorkspacePanel(
+            const panel = new SecondarySystemBar(
                 geometry,
                 connector,
                 this._workspaceCount,
@@ -930,26 +937,46 @@ export default class TilingExtension extends Extension {
                     localIndex,
                     null,
                     monitor
-                )
+                ),
+                this._settings.get_int('panel-spacing')
             );
 
             this._secondaryWorkspacePanels.set(connector, {monitor, panel});
         }
 
-        this._updateSecondaryWorkspacePanels();
+        this._updateSystemBars();
     }
 
-    _updateSecondaryWorkspacePanels() {
-        if (!this._secondaryWorkspacePanels) return;
+    _updateSystemBars() {
+        if (!this._settings) return;
 
         const activeWorkspace =
             global.workspace_manager.get_active_workspace_index();
+        const title = this._focusedWindowTitle();
+        const showTitle =
+            this._settings.get_boolean('panel-show-focused-app');
+        const primaryMonitor = Main.layoutManager.primaryIndex;
+
+        this._primarySystemBar?.update(
+            modulo(
+                activeWorkspace - this._monitorOffset(primaryMonitor),
+                this._workspaceCount
+            ),
+            title,
+            showTitle
+        );
+
+        if (!this._secondaryWorkspacePanels) return;
 
         for (const {monitor, panel} of this._secondaryWorkspacePanels.values())
-            panel.update(modulo(
-                activeWorkspace - this._monitorOffset(monitor),
-                this._workspaceCount
-            ));
+            panel.update(
+                modulo(
+                    activeWorkspace - this._monitorOffset(monitor),
+                    this._workspaceCount
+                ),
+                title,
+                showTitle
+            );
     }
 
     _destroySecondaryWorkspacePanels() {
@@ -995,7 +1022,7 @@ export default class TilingExtension extends Extension {
             'monitor-workspace-offsets',
             JSON.stringify(Object.fromEntries(this._monitorWorkspaceOffsets))
         );
-        this._updateSecondaryWorkspacePanels();
+        this._updateSystemBars();
     }
 
     _normalizeMonitorWorkspaceOffsets() {
@@ -1016,7 +1043,7 @@ export default class TilingExtension extends Extension {
 
         if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) {
             this._retileAll();
-            this._updateSecondaryWorkspacePanels();
+            this._updateSystemBars();
             return;
         }
 
@@ -1027,7 +1054,7 @@ export default class TilingExtension extends Extension {
             );
 
         this._retileAll();
-        this._updateSecondaryWorkspacePanels();
+        this._updateSystemBars();
     }
 
     _rotateInactiveMonitors(stationaryMonitor, delta) {
@@ -1116,12 +1143,12 @@ export default class TilingExtension extends Extension {
     _toggleDecoration() {
         const win = global.display.focus_window;
         if (!win) {
-            Main.notify('Tiling', 'No hay ventana con foco');
+            Main.notify('Tiling', 'No focused window');
             return;
         }
         if (win.is_client_decorated && win.is_client_decorated()) {
             Main.notify('Tiling',
-                `${win.get_wm_class() || 'app'} usa CSD — la app dibuja su titlebar, no se puede ocultar desde extension.`);
+                `${win.get_wm_class() || 'app'} uses client-side decorations, so Dwindle cannot hide its title bar.`);
             return;
         }
         try {
@@ -1131,10 +1158,10 @@ export default class TilingExtension extends Extension {
             else
                 win.decorated = want;
             Main.notify('Tiling',
-                `Decoracion: ${want ? 'visible' : 'oculta'}`);
+                `Title bar: ${want ? 'visible' : 'hidden'}`);
         } catch (e) {
             Main.notify('Tiling',
-                `No se pudo togglear decoracion: ${e.message}`);
+                `Could not toggle the title bar: ${e.message}`);
         }
     }
 
@@ -1153,14 +1180,14 @@ export default class TilingExtension extends Extension {
         });
 
         const title = new St.Label({
-            text: 'Atajos de Tiling',
+            text: 'Tiling Shortcuts',
             x_align: Clutter.ActorAlign.CENTER,
             style: 'font-weight: bold; font-size: 15pt; padding-bottom: 16px;',
         });
         box.add_child(title);
 
         const search = new St.Entry({
-            hint_text: 'Buscar atajo o accion...',
+            hint_text: 'Search shortcuts or actions...',
             style: 'padding: 8px 12px; margin-bottom: 14px;',
             track_hover: true,
             can_focus: true,
@@ -1176,23 +1203,23 @@ export default class TilingExtension extends Extension {
             return m ? `${m}${sep}${arrows}` : arrows;
         };
         const bindings = [
-            [`Super  1..${wsCount}`, 'Cambiar a workspace N'],
-            [`${mods('move-window-to-workspace-1')}  1..${wsCount}`, 'Mover ventana a workspace N sin cambiar de workspace'],
-            [dir('focus-left'), 'Cambiar foco direccional'],
-            [dir('move-window-left'), 'Intercambiar ventana con la del lado'],
-            [dir('window-to-monitor-left'), 'Mover ventana al monitor de ese lado'],
-            [dir('resize-left'), 'Redimensionar (px configurables)'],
-            [accel('rotate-split'), 'Rotar split (vertical <-> horizontal)'],
-            [accel('open-terminal'), 'Abrir terminal'],
-            [accel('screenshot-region'), 'Seleccionar region y abrir en Swappy'],
-            [accel('toggle-monocle'), 'Monoculo: ver solo la ventana con foco'],
-            [accel('toggle-tiling'), 'Activar/desactivar tiling'],
-            [accel('toggle-floating'), 'Alternar ventana tiled/floating'],
-            [accel('float-next-window'), 'La proxima ventana se abre flotante'],
-            [accel('close-window'), 'Cerrar ventana con foco'],
-            [accel('toggle-decoration'), 'Toggle decoracion (solo SSD)'],
-            [accel('show-focused-info'), 'Mostrar WM_CLASS de ventana con foco'],
-            [accel('show-help'), 'Mostrar/ocultar esta ayuda'],
+            [`Super  1..${wsCount}`, 'Switch to workspace N'],
+            [`${mods('move-window-to-workspace-1')}  1..${wsCount}`, 'Move window to workspace N without switching'],
+            [dir('focus-left'), 'Move focus in a direction'],
+            [dir('move-window-left'), 'Swap with the adjacent window'],
+            [dir('window-to-monitor-left'), 'Move window to the adjacent monitor'],
+            [dir('resize-left'), 'Resize (configurable step)'],
+            [accel('rotate-split'), 'Rotate split (vertical <-> horizontal)'],
+            [accel('open-terminal'), 'Open terminal'],
+            [accel('screenshot-region'), 'Select a region and open it in Swappy'],
+            [accel('toggle-monocle'), 'Monocle: show only the focused window'],
+            [accel('toggle-tiling'), 'Toggle tiling'],
+            [accel('toggle-floating'), 'Toggle the window between tiled and floating'],
+            [accel('float-next-window'), 'Float the next window'],
+            [accel('close-window'), 'Close the focused window'],
+            [accel('toggle-decoration'), 'Toggle title bar (SSD only)'],
+            [accel('show-focused-info'), 'Show focused window WM_CLASS'],
+            [accel('show-help'), 'Show/hide this help'],
         ];
 
         const card = new St.BoxLayout({
@@ -1237,14 +1264,14 @@ export default class TilingExtension extends Extension {
         });
 
         const noResults = new St.Label({
-            text: 'Sin coincidencias',
+            text: 'No matches',
             style: 'opacity: 0.5; padding: 12px 4px;',
             visible: false,
         });
         box.add_child(noResults);
 
         const hint = new St.Label({
-            text: 'ESC o Super + F1 para cerrar  ·  cambia los atajos en las preferencias',
+            text: 'Esc or Super+F1 closes  ·  customize shortcuts in Preferences',
             x_align: Clutter.ActorAlign.CENTER,
             style: 'opacity: 0.6; padding-top: 14px; font-size: 9pt;',
         });
@@ -1264,7 +1291,7 @@ export default class TilingExtension extends Extension {
 
         dialog.contentLayout.add_child(box);
         dialog.addButton({
-            label: 'Cerrar',
+            label: 'Close',
             action: () => dialog.close(),
             key: Clutter.KEY_Escape,
         });
@@ -1295,10 +1322,10 @@ export default class TilingExtension extends Extension {
     }
 
     _accelLabel(accel) {
-        if (!accel) return 'Sin asignar';
+        if (!accel) return 'Unassigned';
         const keyMap = {
             Left: '←', Right: '→', Up: '↑', Down: '↓',
-            Return: 'Enter', space: 'Espacio', slash: '/', BackSpace: '⌫',
+            Return: 'Enter', space: 'Space', slash: '/', BackSpace: '⌫',
         };
         let key = accel.replace(/<[^>]+>/g, '');
         key = keyMap[key] || key;
@@ -1312,19 +1339,19 @@ export default class TilingExtension extends Extension {
         const cmd = (this._settings.get_string('terminal-command') || '').trim();
         if (!cmd) {
             Main.notify('Tiling',
-                'No hay terminal configurada. Abre las preferencias de la extension.');
+                'No terminal is configured. Open Dwindle Preferences.');
             return;
         }
         try {
             const [ok, argv] = GLib.shell_parse_argv(cmd);
             if (!ok || !argv || argv.length === 0)
-                throw new Error('comando vacio o invalido');
+                throw new Error('empty or invalid command');
             Gio.Subprocess.new(
                 argv,
                 Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE,
             );
         } catch (e) {
-            Main.notify('Tiling', `No se pudo abrir terminal "${cmd}": ${e.message}`);
+            Main.notify('Tiling', `Could not open terminal "${cmd}": ${e.message}`);
         }
     }
 
@@ -1412,14 +1439,14 @@ export default class TilingExtension extends Extension {
     _showFocusedInfo() {
         const win = global.display.focus_window;
         if (!win) {
-            Main.notify('Tiling', 'No hay ventana con foco');
+            Main.notify('Tiling', 'No focused window');
             return;
         }
-        const cls = win.get_wm_class() || '(vacio)';
-        const inst = win.get_wm_class_instance() || '(vacio)';
-        const title = win.get_title() || '(sin titulo)';
+        const cls = win.get_wm_class() || '(empty)';
+        const inst = win.get_wm_class_instance() || '(empty)';
+        const title = win.get_title() || '(untitled)';
         const msg = `class: ${cls}\ninstance: ${inst}\ntitle: ${title}`;
-        Main.notify('Ventana focused', msg);
+        Main.notify('Focused window', msg);
         console.log(`[tiling] focused window — ${msg.replace(/\n/g, ' | ')}`);
     }
 
@@ -1668,11 +1695,11 @@ export default class TilingExtension extends Extension {
         if (this._floatingWindows.has(win)) {
             this._floatingWindows.delete(win);
             if (this._isTileable(win)) this._addToTree(win, null);
-            Main.notify('Tiling', `${win.get_wm_class() || 'ventana'}: tiled`);
+            Main.notify('Tiling', `${win.get_wm_class() || 'window'}: tiled`);
         } else {
             this._floatingWindows.add(win);
             this._removeFromTree(win);
-            Main.notify('Tiling', `${win.get_wm_class() || 'ventana'}: floating`);
+            Main.notify('Tiling', `${win.get_wm_class() || 'window'}: floating`);
         }
         this._retileWorkspace(win.get_workspace());
     }
@@ -1685,8 +1712,8 @@ export default class TilingExtension extends Extension {
         if (this._floatNextWindow) this._showFloatNextIndicator();
         else this._hideFloatNextIndicator();
         Main.notify('Tiling', this._floatNextWindow
-            ? 'La proxima ventana se abrira flotante'
-            : 'Cancelado: la proxima ventana sera tiled');
+            ? 'The next window will open floating'
+            : 'Canceled: the next window will be tiled');
     }
 
     // Icono en el panel (lado derecho) mientras el modo one-shot esta armado.

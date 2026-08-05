@@ -5,296 +5,296 @@
 
     <key name="switch-local-workspace-1" type="as">
       <default><![CDATA[['<Super>1']]]></default>
-      <summary>Mostrar workspace local 1 en el monitor activo</summary>
+      <summary>Show local workspace 1 on the focused monitor</summary>
     </key>
     <key name="switch-local-workspace-2" type="as">
       <default><![CDATA[['<Super>2']]]></default>
-      <summary>Mostrar workspace local 2 en el monitor activo</summary>
+      <summary>Show local workspace 2 on the focused monitor</summary>
     </key>
     <key name="switch-local-workspace-3" type="as">
       <default><![CDATA[['<Super>3']]]></default>
-      <summary>Mostrar workspace local 3 en el monitor activo</summary>
+      <summary>Show local workspace 3 on the focused monitor</summary>
     </key>
     <key name="switch-local-workspace-4" type="as">
       <default><![CDATA[['<Super>4']]]></default>
-      <summary>Mostrar workspace local 4 en el monitor activo</summary>
+      <summary>Show local workspace 4 on the focused monitor</summary>
     </key>
     <key name="switch-local-workspace-5" type="as">
       <default><![CDATA[['<Super>5']]]></default>
-      <summary>Mostrar workspace local 5 en el monitor activo</summary>
+      <summary>Show local workspace 5 on the focused monitor</summary>
     </key>
     <key name="switch-local-workspace-6" type="as">
       <default><![CDATA[['<Super>6']]]></default>
-      <summary>Mostrar workspace local 6 en el monitor activo</summary>
+      <summary>Show local workspace 6 on the focused monitor</summary>
     </key>
     <key name="switch-local-workspace-7" type="as">
       <default><![CDATA[['<Super>7']]]></default>
-      <summary>Mostrar workspace local 7 en el monitor activo</summary>
+      <summary>Show local workspace 7 on the focused monitor</summary>
     </key>
     <key name="switch-local-workspace-8" type="as">
       <default><![CDATA[['<Super>8']]]></default>
-      <summary>Mostrar workspace local 8 en el monitor activo</summary>
+      <summary>Show local workspace 8 on the focused monitor</summary>
     </key>
     <key name="switch-local-workspace-9" type="as">
       <default><![CDATA[['<Super>9']]]></default>
-      <summary>Mostrar workspace local 9 en el monitor activo</summary>
+      <summary>Show local workspace 9 on the focused monitor</summary>
     </key>
     <key name="switch-local-workspace-10" type="as">
       <default><![CDATA[['<Super>0']]]></default>
-      <summary>Mostrar workspace local 10 en el monitor activo</summary>
+      <summary>Show local workspace 10 on the focused monitor</summary>
     </key>
 
     <key name="move-window-to-workspace-1" type="as">
       <default><![CDATA[['<Super><Shift>1']]]></default>
-      <summary>Mover ventana al workspace 1 sin cambiar de workspace</summary>
+      <summary>Move the focused window to workspace 1 without switching</summary>
     </key>
     <key name="move-window-to-workspace-2" type="as">
       <default><![CDATA[['<Super><Shift>2']]]></default>
-      <summary>Mover ventana al workspace 2 sin cambiar de workspace</summary>
+      <summary>Move the focused window to workspace 2 without switching</summary>
     </key>
     <key name="move-window-to-workspace-3" type="as">
       <default><![CDATA[['<Super><Shift>3']]]></default>
-      <summary>Mover ventana al workspace 3 sin cambiar de workspace</summary>
+      <summary>Move the focused window to workspace 3 without switching</summary>
     </key>
     <key name="move-window-to-workspace-4" type="as">
       <default><![CDATA[['<Super><Shift>4']]]></default>
-      <summary>Mover ventana al workspace 4 sin cambiar de workspace</summary>
+      <summary>Move the focused window to workspace 4 without switching</summary>
     </key>
     <key name="move-window-to-workspace-5" type="as">
       <default><![CDATA[['<Super><Shift>5']]]></default>
-      <summary>Mover ventana al workspace 5 sin cambiar de workspace</summary>
+      <summary>Move the focused window to workspace 5 without switching</summary>
     </key>
     <key name="move-window-to-workspace-6" type="as">
       <default><![CDATA[['<Super><Shift>6']]]></default>
-      <summary>Mover ventana al workspace 6 sin cambiar de workspace</summary>
+      <summary>Move the focused window to workspace 6 without switching</summary>
     </key>
     <key name="move-window-to-workspace-7" type="as">
       <default><![CDATA[['<Super><Shift>7']]]></default>
-      <summary>Mover ventana al workspace 7 sin cambiar de workspace</summary>
+      <summary>Move the focused window to workspace 7 without switching</summary>
     </key>
     <key name="move-window-to-workspace-8" type="as">
       <default><![CDATA[['<Super><Shift>8']]]></default>
-      <summary>Mover ventana al workspace 8 sin cambiar de workspace</summary>
+      <summary>Move the focused window to workspace 8 without switching</summary>
     </key>
     <key name="move-window-to-workspace-9" type="as">
       <default><![CDATA[['<Super><Shift>9']]]></default>
-      <summary>Mover ventana al workspace 9 sin cambiar de workspace</summary>
+      <summary>Move the focused window to workspace 9 without switching</summary>
     </key>
     <key name="move-window-to-workspace-10" type="as">
       <default><![CDATA[['<Super><Shift>0']]]></default>
-      <summary>Mover ventana al workspace 10 sin cambiar de workspace</summary>
+      <summary>Move the focused window to workspace 10 without switching</summary>
     </key>
 
     <key name="workspace-count" type="i">
       <range min="1" max="10"/>
       <default>10</default>
-      <summary>Numero de workspaces fijos</summary>
+      <summary>Number of fixed workspaces</summary>
     </key>
     <key name="monitor-local-workspaces" type="b">
       <default>true</default>
-      <summary>Mantener una seleccion de workspace independiente por monitor</summary>
+      <summary>Keep an independent workspace selection for each monitor</summary>
     </key>
     <key name="monitor-workspace-offsets" type="s">
       <default>'{}'</default>
-      <summary>Offsets internos por conector para workspaces locales</summary>
+      <summary>Internal per-connector offsets for monitor-local workspaces</summary>
     </key>
     <key name="animations-enabled" type="b">
       <default>true</default>
-      <summary>Animar cambios de geometria del mosaico BSP</summary>
+      <summary>Animate BSP tiling geometry changes</summary>
     </key>
     <key name="animation-duration-ms" type="i">
       <range min="0" max="1000"/>
       <default>180</default>
-      <summary>Duracion de animaciones del mosaico en milisegundos</summary>
+      <summary>Tiling animation duration in milliseconds</summary>
     </key>
     <key name="workspace-animations-enabled" type="b">
       <default>true</default>
-      <summary>Animar cambios de workspace local por monitor</summary>
+      <summary>Animate monitor-local workspace changes</summary>
     </key>
     <key name="workspace-animation-duration-ms" type="i">
       <range min="0" max="1000"/>
       <default>220</default>
-      <summary>Duracion de animaciones de workspace en milisegundos</summary>
+      <summary>Workspace animation duration in milliseconds</summary>
     </key>
     <key name="animation-disabled-classes" type="as">
       <default>[]</default>
-      <summary>WM_CLASS que no deben recibir transformaciones animadas</summary>
+      <summary>WM_CLASS values that should not receive animated transforms</summary>
     </key>
 
 
 
     <key name="tiling-enabled" type="b">
       <default>true</default>
-      <summary>Activar tiling automatico (dwindle/BSP)</summary>
+      <summary>Enable automatic dwindle BSP tiling</summary>
     </key>
     <key name="strict-tiling" type="b">
       <default>true</default>
-      <summary>Modo estricto: ventanas tiled vuelven a su geometria si el usuario las arrastra</summary>
+      <summary>Strict mode: tiled windows return to their assigned geometry after dragging</summary>
     </key>
     <key name="disable-native-window-management" type="b">
       <default>true</default>
-      <summary>Desactivar manejo nativo de GNOME (edge-tiling, auto-maximize, Super+Up/Down/Left/Right) mientras la extension este activa</summary>
+      <summary>Disable native GNOME edge tiling, auto-maximize, and Super+Arrow shortcuts while Dwindle is active</summary>
     </key>
     <key name="focus-border-enabled" type="b">
       <default>true</default>
-      <summary>Mostrar borde de color alrededor de la ventana con focus</summary>
+      <summary>Show a colored border around the focused window</summary>
     </key>
     <key name="warp-pointer-on-focus" type="b">
       <default>true</default>
-      <summary>Mover el cursor al centro de la ventana al cambiar de foco o moverla de monitor</summary>
+      <summary>Move the pointer to the window center after changing focus or monitors</summary>
     </key>
     <key name="focus-follows-mouse" type="b">
       <default>true</default>
-      <summary>El foco sigue al puntero (activa el focus-mode sloppy de GNOME mientras la extension este activa; restaura el valor original al desactivar)</summary>
+      <summary>Focus follows the pointer (uses GNOME sloppy focus while Dwindle is active and restores the original value when disabled)</summary>
     </key>
     <key name="focus-border-width" type="i">
       <range min="0" max="20"/>
       <default>2</default>
-      <summary>Grosor del borde de focus en pixeles</summary>
+      <summary>Focus border width in pixels</summary>
     </key>
     <key name="focus-border-color" type="s">
       <default>'#3584e4'</default>
-      <summary>Color del borde de focus (hex o nombre CSS)</summary>
+      <summary>Focus border color (hex or CSS name)</summary>
     </key>
     <key name="gap-size" type="i">
       <range min="0" max="100"/>
       <default>8</default>
-      <summary>Espacio en pixeles entre ventanas y bordes</summary>
+      <summary>Space in pixels between windows and monitor edges</summary>
     </key>
     <key name="floating-window-classes" type="as">
-      <default>['Gnome-calculator', 'org.gnome.Calculator', 'org.gnome.Settings', 'Gnome-control-center']</default>
-      <summary>WM_CLASS de ventanas que abren en modo flotante por defecto</summary>
+      <default>['Gnome-calculator', 'org.gnome.Calculator', 'org.gnome.Settings', 'Gnome-control-center', 'wofi']</default>
+      <summary>WM_CLASS values for windows that open floating by default</summary>
     </key>
     <key name="toggle-tiling" type="as">
       <default><![CDATA[['<Super>t']]]></default>
-      <summary>Activar o desactivar tiling automatico</summary>
+      <summary>Toggle automatic tiling</summary>
     </key>
     <key name="toggle-floating" type="as">
       <default><![CDATA[['<Super>v']]]></default>
-      <summary>Alternar ventana activa entre tiled y floating</summary>
+      <summary>Toggle the focused window between tiled and floating</summary>
     </key>
     <key name="float-next-window" type="as">
       <default><![CDATA[['<Super><Shift>v']]]></default>
-      <summary>Hacer que la proxima ventana que se abra sea flotante</summary>
+      <summary>Make the next opened window floating</summary>
     </key>
     <key name="focus-left" type="as">
       <default><![CDATA[['<Super>Left']]]></default>
-      <summary>Cambiar foco a la ventana de la izquierda</summary>
+      <summary>Focus the window to the left</summary>
     </key>
     <key name="focus-right" type="as">
       <default><![CDATA[['<Super>Right']]]></default>
-      <summary>Cambiar foco a la ventana de la derecha</summary>
+      <summary>Focus the window to the right</summary>
     </key>
     <key name="focus-up" type="as">
       <default><![CDATA[['<Super>Up']]]></default>
-      <summary>Cambiar foco a la ventana de arriba</summary>
+      <summary>Focus the window above</summary>
     </key>
     <key name="focus-down" type="as">
       <default><![CDATA[['<Super>Down']]]></default>
-      <summary>Cambiar foco a la ventana de abajo</summary>
+      <summary>Focus the window below</summary>
     </key>
     <key name="show-focused-info" type="as">
       <default><![CDATA[['<Super>i']]]></default>
-      <summary>Mostrar WM_CLASS de la ventana con foco (util para configurar floating list)</summary>
+      <summary>Show the focused window WM_CLASS (useful for configuring floating applications)</summary>
     </key>
     <key name="close-window" type="as">
       <default><![CDATA[['<Super>q']]]></default>
-      <summary>Cerrar ventana con foco</summary>
+      <summary>Close the focused window</summary>
     </key>
     <key name="toggle-decoration" type="as">
       <default><![CDATA[['<Super>b']]]></default>
-      <summary>Ocultar/mostrar decoracion server-side. NO funciona para apps GTK con CSD (Firefox, GNOME apps, etc).</summary>
+      <summary>Toggle server-side title bar. This does not affect GTK apps with client-side decorations (Firefox, GNOME apps, etc.).</summary>
     </key>
     <key name="show-help" type="as">
       <default><![CDATA[['<Super>F1', '<Super>slash', '<Super><Shift>slash']]]></default>
-      <summary>Mostrar/ocultar modal con todos los atajos</summary>
+      <summary>Show or hide the shortcut help dialog</summary>
     </key>
     <key name="resize-left" type="as">
       <default><![CDATA[['<Super><Control>Left']]]></default>
-      <summary>Redimensionar mover el borde a la izquierda</summary>
+      <summary>Resize by moving the split border left</summary>
     </key>
     <key name="resize-right" type="as">
       <default><![CDATA[['<Super><Control>Right']]]></default>
-      <summary>Redimensionar mover el borde a la derecha</summary>
+      <summary>Resize by moving the split border right</summary>
     </key>
     <key name="resize-up" type="as">
       <default><![CDATA[['<Super><Control>Up']]]></default>
-      <summary>Redimensionar mover el borde arriba</summary>
+      <summary>Resize by moving the split border up</summary>
     </key>
     <key name="resize-down" type="as">
       <default><![CDATA[['<Super><Control>Down']]]></default>
-      <summary>Redimensionar mover el borde abajo</summary>
+      <summary>Resize by moving the split border down</summary>
     </key>
     <key name="resize-step-px" type="i">
       <range min="1" max="200"/>
       <default>10</default>
-      <summary>Pixeles que se mueve el borde por pulsacion de resize</summary>
+      <summary>Pixels to move a split border per resize keypress</summary>
     </key>
     <key name="rotate-split" type="as">
       <default><![CDATA[['<Super>r']]]></default>
-      <summary>Rotar la orientacion del split entre la ventana con foco y su vecina (vertical &lt;-&gt; horizontal)</summary>
+      <summary>Rotate the split between the focused window and its neighbor (vertical &lt;-&gt; horizontal)</summary>
     </key>
     <key name="move-window-left" type="as">
       <default><![CDATA[['<Super><Shift>Left']]]></default>
-      <summary>Intercambiar la ventana con la de la izquierda</summary>
+      <summary>Swap the focused window with the window to the left</summary>
     </key>
     <key name="move-window-right" type="as">
       <default><![CDATA[['<Super><Shift>Right']]]></default>
-      <summary>Intercambiar la ventana con la de la derecha</summary>
+      <summary>Swap the focused window with the window to the right</summary>
     </key>
     <key name="move-window-up" type="as">
       <default><![CDATA[['<Super><Shift>Up']]]></default>
-      <summary>Intercambiar la ventana con la de arriba</summary>
+      <summary>Swap the focused window with the window above</summary>
     </key>
     <key name="move-window-down" type="as">
       <default><![CDATA[['<Super><Shift>Down']]]></default>
-      <summary>Intercambiar la ventana con la de abajo</summary>
+      <summary>Swap the focused window with the window below</summary>
     </key>
     <!-- NB: estos nombres NO pueden coincidir con keybindings nativas de mutter
          (move-to-monitor-*, toggle-fullscreen) o el grab falla en silencio.
          Por eso usan prefijo propio (window-to-monitor-*, toggle-monocle). -->
     <key name="window-to-monitor-left" type="as">
       <default><![CDATA[['<Super><Shift><Control>Left']]]></default>
-      <summary>Mover ventana al monitor de la izquierda</summary>
+      <summary>Move the focused window to the monitor on the left</summary>
     </key>
     <key name="window-to-monitor-right" type="as">
       <default><![CDATA[['<Super><Shift><Control>Right']]]></default>
-      <summary>Mover ventana al monitor de la derecha</summary>
+      <summary>Move the focused window to the monitor on the right</summary>
     </key>
     <key name="window-to-monitor-up" type="as">
       <default><![CDATA[['<Super><Shift><Control>Up']]]></default>
-      <summary>Mover ventana al monitor de arriba</summary>
+      <summary>Move the focused window to the monitor above</summary>
     </key>
     <key name="window-to-monitor-down" type="as">
       <default><![CDATA[['<Super><Shift><Control>Down']]]></default>
-      <summary>Mover ventana al monitor de abajo</summary>
+      <summary>Move the focused window to the monitor below</summary>
     </key>
     <key name="toggle-monocle" type="as">
       <default><![CDATA[['<Super>f']]]></default>
-      <summary>Monoculo: mostrar solo la ventana con foco a tamano completo (las demas se minimizan). Pulsar de nuevo restaura el mosaico.</summary>
+      <summary>Monocle: show only the focused window at full size; press again to restore the tiling layout.</summary>
     </key>
     <key name="open-terminal" type="as">
       <default><![CDATA[['<Super>Return']]]></default>
-      <summary>Abrir terminal (Super+Enter)</summary>
+      <summary>Open a terminal (Super+Enter)</summary>
     </key>
     <key name="screenshot-region" type="as">
       <default><![CDATA[['Print']]]></default>
-      <summary>Seleccionar una region y abrir la captura en Swappy</summary>
+      <summary>Select a region and open the screenshot in Swappy</summary>
     </key>
 
     <key name="terminal-command" type="s">
       <default>'ghostty'</default>
-      <summary>Comando ejecutado por Super+Enter. Ejemplos: ghostty, kgx, gnome-terminal, alacritty, kitty, foot, konsole, xterm, ptyxis --new-window</summary>
+      <summary>Command run by Super+Enter. Examples: ghostty, kgx, gnome-terminal, alacritty, kitty, foot, konsole, xterm, ptyxis --new-window</summary>
     </key>
 
     <key name="panel-spacing" type="i">
       <range min="-1" max="40"/>
       <default>-1</default>
-      <summary>Separacion en pixeles entre indicadores del panel. -1 = no tocar (dejar el valor de GNOME).</summary>
+      <summary>Spacing in pixels between system bar indicators. -1 keeps the GNOME default.</summary>
     </key>
     <key name="panel-show-focused-app" type="b">
       <default>true</default>
-      <summary>Mostrar un indicador en la barra con el nombre de la app que tiene el foco.</summary>
+      <summary>Show the focused window title in the center of the system bar.</summary>
     </key>
   </schema>
 </schemalist>

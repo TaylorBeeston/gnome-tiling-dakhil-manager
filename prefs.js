@@ -13,24 +13,24 @@ export default class TilingPreferences extends ExtensionPreferences {
             title: 'General', icon_name: 'applications-system-symbolic',
         });
         const barPage = new Adw.PreferencesPage({
-            title: 'Barra', icon_name: 'view-continuous-symbolic',
+            title: 'Bar', icon_name: 'view-continuous-symbolic',
         });
         const terminalPage = new Adw.PreferencesPage({
             title: 'Terminal', icon_name: 'utilities-terminal-symbolic',
         });
         const floatPage = new Adw.PreferencesPage({
-            title: 'Flotantes', icon_name: 'focus-windows-symbolic',
+            title: 'Floating Apps', icon_name: 'focus-windows-symbolic',
         });
         const shortcutsPage = new Adw.PreferencesPage({
-            title: 'Atajos', icon_name: 'input-keyboard-symbolic',
+            title: 'Shortcuts', icon_name: 'input-keyboard-symbolic',
         });
 
         const general = new Adw.PreferencesGroup({title: 'General'});
         generalPage.add(general);
 
         const countRow = new Adw.SpinRow({
-            title: 'Numero de workspaces',
-            subtitle: 'Workspaces fijos (1-10). Cambiar este valor actualiza num-workspaces al instante, pero para que se actualicen los atajos Super+N hay que desactivar y reactivar la extension.',
+            title: 'Number of workspaces',
+            subtitle: 'Fixed workspaces (1-10). Changes apply immediately; use make reload after changing the count so every Super+N shortcut is registered.',
             adjustment: new Gtk.Adjustment({
                 lower: 1, upper: 10, step_increment: 1, page_increment: 1,
             }),
@@ -39,66 +39,66 @@ export default class TilingPreferences extends ExtensionPreferences {
             Gio.SettingsBindFlags.DEFAULT);
         general.add(countRow);
         const localWorkspacesRow = new Adw.SwitchRow({
-            title: 'Workspaces locales por monitor',
-            subtitle: 'Super+N cambia solamente el monitor que tiene el foco. Cada monitor conserva su propio workspace 1-10.',
+            title: 'Monitor-local workspaces',
+            subtitle: 'Super+N switches only the focused monitor. Each monitor keeps its own workspace 1-10.',
         });
         settings.bind('monitor-local-workspaces', localWorkspacesRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         general.add(localWorkspacesRow);
 
         const enabledRow = new Adw.SwitchRow({
-            title: 'Tiling automatico',
-            subtitle: 'Acomoda las ventanas en dwindle (BSP) al abrirlas',
+            title: 'Automatic tiling',
+            subtitle: 'Tile new windows automatically using a dwindle BSP layout.',
         });
         settings.bind('tiling-enabled', enabledRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         general.add(enabledRow);
 
         const strictRow = new Adw.SwitchRow({
-            title: 'Modo estricto',
-            subtitle: 'Ventanas tiled vuelven a su geometria si las arrastras o redimensionas. Solo se pueden mover/redimensionar libremente las ventanas en modo flotante (Super+V).',
+            title: 'Strict mode',
+            subtitle: 'Tiled windows snap back to their assigned geometry after dragging or resizing. Floating windows remain freely movable and resizable (Super+V).',
         });
         settings.bind('strict-tiling', strictRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         general.add(strictRow);
 
         const disableNativeRow = new Adw.SwitchRow({
-            title: 'Desactivar manejo nativo de GNOME',
-            subtitle: 'Apaga edge-tiling, auto-maximize y los atajos Super+Up/Down/Left/Right (maximize/snap a mitades) mientras la extension este activa. Cambios requieren desactivar y reactivar la extension.',
+            title: 'Disable native GNOME window management',
+            subtitle: 'Disable edge tiling, auto-maximize, and GNOME Super+Arrow maximize/snap shortcuts while Dwindle is active. Use make reload after changing this setting.',
         });
         settings.bind('disable-native-window-management', disableNativeRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         general.add(disableNativeRow);
 
         const warpPointerRow = new Adw.SwitchRow({
-            title: 'Cursor sigue al foco',
-            subtitle: 'Mueve el puntero al centro de la ventana al cambiar de foco direccional o moverla de monitor.',
+            title: 'Pointer follows focus',
+            subtitle: 'Move the pointer to the center of a window after directional focus or a monitor transfer.',
         });
         settings.bind('warp-pointer-on-focus', warpPointerRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         general.add(warpPointerRow);
 
         const focusFollowsMouseRow = new Adw.SwitchRow({
-            title: 'El foco sigue al raton',
-            subtitle: 'Activa el modo sloppy de GNOME: al pasar el puntero sobre una ventana recibe el foco sin clic. Al desactivarlo se restaura tu ajuste original de GNOME.',
+            title: 'Focus follows pointer',
+            subtitle: 'Enable GNOME sloppy focus: hovering a window focuses it without a click. Disabling this restores the original GNOME focus mode.',
         });
         settings.bind('focus-follows-mouse', focusFollowsMouseRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         general.add(focusFollowsMouseRow);
 
-        const borderGroup = new Adw.PreferencesGroup({title: 'Borde de focus'});
+        const borderGroup = new Adw.PreferencesGroup({title: 'Focus border'});
         generalPage.add(borderGroup);
 
         const borderEnabledRow = new Adw.SwitchRow({
-            title: 'Mostrar borde',
-            subtitle: 'Dibuja un borde de color alrededor de la ventana con focus',
+            title: 'Show border',
+            subtitle: 'Draw a colored border around the focused window.',
         });
         settings.bind('focus-border-enabled', borderEnabledRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         borderGroup.add(borderEnabledRow);
 
         const borderWidthRow = new Adw.SpinRow({
-            title: 'Grosor (px)',
+            title: 'Width (px)',
             adjustment: new Gtk.Adjustment({
                 lower: 0, upper: 20, step_increment: 1, page_increment: 2,
             }),
@@ -108,7 +108,7 @@ export default class TilingPreferences extends ExtensionPreferences {
         borderGroup.add(borderWidthRow);
 
         const borderColorRow = new Adw.EntryRow({
-            title: 'Color (hex o nombre CSS)',
+            title: 'Color (hex or CSS name)',
         });
         settings.bind('focus-border-color', borderColorRow, 'text',
             Gio.SettingsBindFlags.DEFAULT);
@@ -116,7 +116,7 @@ export default class TilingPreferences extends ExtensionPreferences {
 
         const gapRow = new Adw.SpinRow({
             title: 'Gap (px)',
-            subtitle: 'Espacio entre ventanas y bordes',
+            subtitle: 'Space between windows and monitor edges.',
             adjustment: new Gtk.Adjustment({
                 lower: 0, upper: 100, step_increment: 1, page_increment: 4,
             }),
@@ -126,8 +126,8 @@ export default class TilingPreferences extends ExtensionPreferences {
         general.add(gapRow);
 
         const resizeStepRow = new Adw.SpinRow({
-            title: 'Paso de resize (px)',
-            subtitle: 'Pixeles que se mueve el borde con Super+Ctrl+Flecha',
+            title: 'Resize step (px)',
+            subtitle: 'Pixels to move the split border with Super+Ctrl+Arrow.',
             adjustment: new Gtk.Adjustment({
                 lower: 1, upper: 200, step_increment: 1, page_increment: 10,
             }),
@@ -136,20 +136,20 @@ export default class TilingPreferences extends ExtensionPreferences {
             Gio.SettingsBindFlags.DEFAULT);
         general.add(resizeStepRow);
         const animationGroup = new Adw.PreferencesGroup({
-            title: 'Animaciones',
+            title: 'Animations',
         });
         generalPage.add(animationGroup);
 
         const animationsEnabledRow = new Adw.SwitchRow({
-            title: 'Animar mosaico',
-            subtitle: 'Suaviza aperturas, cierres, swaps y cambios de tamano.',
+            title: 'Animate tiling',
+            subtitle: 'Animate window opens, closes, swaps, and geometry changes.',
         });
         settings.bind('animations-enabled', animationsEnabledRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         animationGroup.add(animationsEnabledRow);
 
         const animationDurationRow = new Adw.SpinRow({
-            title: 'Duracion del mosaico (ms)',
+            title: 'Tiling animation duration (ms)',
             adjustment: new Gtk.Adjustment({
                 lower: 0, upper: 1000, step_increment: 10, page_increment: 50,
             }),
@@ -159,15 +159,15 @@ export default class TilingPreferences extends ExtensionPreferences {
         animationGroup.add(animationDurationRow);
 
         const workspaceAnimationsRow = new Adw.SwitchRow({
-            title: 'Animar workspaces locales',
-            subtitle: 'Desliza solamente el monitor que cambia de workspace.',
+            title: 'Animate local workspaces',
+            subtitle: 'Animate only the monitor changing its local workspace.',
         });
         settings.bind('workspace-animations-enabled', workspaceAnimationsRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         animationGroup.add(workspaceAnimationsRow);
 
         const workspaceAnimationDurationRow = new Adw.SpinRow({
-            title: 'Duracion de workspace (ms)',
+            title: 'Workspace animation duration (ms)',
             adjustment: new Gtk.Adjustment({
                 lower: 0, upper: 1000, step_increment: 10, page_increment: 50,
             }),
@@ -181,7 +181,7 @@ export default class TilingPreferences extends ExtensionPreferences {
         animationGroup.add(workspaceAnimationDurationRow);
 
         const animationExclusionsRow = new Adw.EntryRow({
-            title: 'Apps sin animacion',
+            title: 'Apps without animations',
             text: settings.get_strv('animation-disabled-classes').join(', '),
         });
         animationExclusionsRow.connect('changed', () => {
@@ -198,11 +198,11 @@ export default class TilingPreferences extends ExtensionPreferences {
 
         const terminalGroup = new Adw.PreferencesGroup({
             title: 'Terminal',
-            description: 'Comando que ejecuta Super+Enter. Tiene que existir en $PATH. Ejemplos: ghostty, kgx, gnome-terminal, alacritty, kitty, foot, konsole, xterm, "ptyxis --new-window".',
+            description: 'Command run by Super+Enter. It must be available on the executable search path. Examples: ghostty, kgx, gnome-terminal, alacritty, kitty, foot, konsole, xterm, "ptyxis --new-window".',
         });
         terminalPage.add(terminalGroup);
 
-        const termRow = new Adw.EntryRow({title: 'Comando de terminal'});
+        const termRow = new Adw.EntryRow({title: 'Terminal command'});
         settings.bind('terminal-command', termRow, 'text',
             Gio.SettingsBindFlags.DEFAULT);
         terminalGroup.add(termRow);
@@ -212,8 +212,8 @@ export default class TilingPreferences extends ExtensionPreferences {
             'alacritty', 'kitty', 'foot', 'konsole', 'wezterm', 'xterm',
         ];
         const detectedRow = new Adw.ExpanderRow({
-            title: 'Terminales detectadas',
-            subtitle: 'Pulsa una para configurarla',
+            title: 'Detected terminals',
+            subtitle: 'Select one to use it',
         });
         let anyDetected = false;
         for (const t of knownTerminals) {
@@ -222,7 +222,7 @@ export default class TilingPreferences extends ExtensionPreferences {
                 anyDetected = true;
                 const row = new Adw.ActionRow({title: t});
                 const btn = new Gtk.Button({
-                    label: 'Usar',
+                    label: 'Use',
                     valign: Gtk.Align.CENTER,
                     css_classes: ['flat'],
                 });
@@ -237,14 +237,14 @@ export default class TilingPreferences extends ExtensionPreferences {
         if (anyDetected) terminalGroup.add(detectedRow);
 
         const panelGroup = new Adw.PreferencesGroup({
-            title: 'Barra superior',
-            description: 'Ajustes de la barra superior de GNOME.',
+            title: 'Top bar',
+            description: 'Customize the Dwindle system bar.',
         });
         barPage.add(panelGroup);
 
         const spacingRow = new Adw.SpinRow({
-            title: 'Separacion entre indicadores (px)',
-            subtitle: '-1 = dejar la separacion por defecto de GNOME',
+            title: 'Indicator spacing (px)',
+            subtitle: '-1 keeps the default GNOME spacing.',
             adjustment: new Gtk.Adjustment({
                 lower: -1, upper: 40, step_increment: 1, page_increment: 4,
             }),
@@ -254,21 +254,21 @@ export default class TilingPreferences extends ExtensionPreferences {
         panelGroup.add(spacingRow);
 
         const focusedAppRow = new Adw.SwitchRow({
-            title: 'Mostrar app con foco',
-            subtitle: 'Muestra el nombre de la app con foco en la barra (a la izquierda).',
+            title: 'Show focused window',
+            subtitle: 'Show the focused window title in the center of the bar.',
         });
         settings.bind('panel-show-focused-app', focusedAppRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         panelGroup.add(focusedAppRow);
 
         const floatGroup = new Adw.PreferencesGroup({
-            title: 'Aplicaciones flotantes',
-            description: 'Marca las apps que quieres que abran en modo flotante. Si no aparece tu app o quieres agregar un WM_CLASS manual, usa dconf-editor en /org/gnome/shell/extensions/dwindle/. Tambien puedes alternar al vuelo con Super+V.',
+            title: 'Floating applications',
+            description: 'Select applications that should open floating. Add an unlisted WM_CLASS manually below. Super+V toggles the focused window at runtime.',
         });
         floatPage.add(floatGroup);
 
         const search = new Gtk.SearchEntry({
-            placeholder_text: 'Buscar aplicacion...',
+            placeholder_text: 'Search applications...',
             hexpand: true,
         });
 
@@ -357,13 +357,13 @@ export default class TilingPreferences extends ExtensionPreferences {
         search.connect('search-changed', () => listBox.invalidate_filter());
 
         const manualGroup = new Adw.PreferencesGroup({
-            title: 'Entradas manuales',
-            description: 'Agrega un WM_CLASS que no aparezca en la lista de apps de arriba. Util cuando el StartupWMClass del .desktop no coincide con el class real (descubrelo con Super+I sobre la ventana).',
+            title: 'Manual entries',
+            description: 'Add a WM_CLASS missing from the application list. Use Super+I on a focused window to discover its runtime class.',
         });
         floatPage.add(manualGroup);
 
         const manualEntry = new Adw.EntryRow({
-            title: 'Nuevo WM_CLASS',
+            title: 'New WM_CLASS',
             show_apply_button: true,
         });
         manualGroup.add(manualEntry);
@@ -377,7 +377,7 @@ export default class TilingPreferences extends ExtensionPreferences {
             const current = settings.get_strv('floating-window-classes').slice().sort();
             for (const cls of current) {
                 if (appClassSet.has(cls)) continue;
-                const row = new Adw.ActionRow({title: cls, subtitle: 'Entrada manual'});
+                const row = new Adw.ActionRow({title: cls, subtitle: 'Manual entry'});
                 const btn = new Gtk.Button({
                     icon_name: 'edit-delete-symbolic',
                     valign: Gtk.Align.CENTER,
@@ -437,7 +437,7 @@ export default class TilingPreferences extends ExtensionPreferences {
                 transient_for: window,
                 default_width: 420,
                 default_height: 180,
-                title: 'Nuevo atajo',
+                title: 'New shortcut',
             });
             const box = new Gtk.Box({
                 orientation: Gtk.Orientation.VERTICAL,
@@ -445,11 +445,11 @@ export default class TilingPreferences extends ExtensionPreferences {
                 margin_top: 24, margin_bottom: 24, margin_start: 24, margin_end: 24,
             });
             box.append(new Gtk.Label({
-                label: `Pulsa la nueva combinacion para\n<b>${GLib.markup_escape_text(title, -1)}</b>`,
+                label: `Press the new key combination for\n<b>${GLib.markup_escape_text(title, -1)}</b>`,
                 use_markup: true, justify: Gtk.Justification.CENTER,
             }));
             box.append(new Gtk.Label({
-                label: 'Esc cancela · Retroceso borra el atajo',
+                label: 'Esc cancels · Backspace clears the shortcut',
                 css_classes: ['dim-label', 'caption'],
             }));
             dialog.set_content(box);
@@ -496,12 +496,12 @@ export default class TilingPreferences extends ExtensionPreferences {
                 icon_name: 'document-edit-symbolic',
                 valign: Gtk.Align.CENTER,
                 css_classes: ['flat'],
-                tooltip_text: 'Editar atajo',
+                tooltip_text: 'Edit shortcut',
             });
             const sync = () => {
                 const accels = settings.get_strv(key);
                 if (!accels.length) {
-                    label.label = 'Sin asignar';
+                    label.label = 'Unassigned';
                     return;
                 }
                 const [ok, keyval, mods] = Gtk.accelerator_parse(accels[0]);
@@ -518,42 +518,42 @@ export default class TilingPreferences extends ExtensionPreferences {
         };
 
         const shortcutGroups = [
-            ['Foco', [
-                ['focus-left', 'Foco a la izquierda'],
-                ['focus-right', 'Foco a la derecha'],
-                ['focus-up', 'Foco arriba'],
-                ['focus-down', 'Foco abajo'],
+            ['Focus', [
+                ['focus-left', 'Focus left'],
+                ['focus-right', 'Focus right'],
+                ['focus-up', 'Focus up'],
+                ['focus-down', 'Focus down'],
             ]],
-            ['Mover / intercambiar ventana', [
-                ['move-window-left', 'Intercambiar con la izquierda'],
-                ['move-window-right', 'Intercambiar con la derecha'],
-                ['move-window-up', 'Intercambiar con la de arriba'],
-                ['move-window-down', 'Intercambiar con la de abajo'],
+            ['Move / swap window', [
+                ['move-window-left', 'Swap left'],
+                ['move-window-right', 'Swap right'],
+                ['move-window-up', 'Swap up'],
+                ['move-window-down', 'Swap down'],
             ]],
-            ['Monitores', [
-                ['window-to-monitor-left', 'Mover al monitor izquierdo'],
-                ['window-to-monitor-right', 'Mover al monitor derecho'],
-                ['window-to-monitor-up', 'Mover al monitor de arriba'],
-                ['window-to-monitor-down', 'Mover al monitor de abajo'],
+            ['Monitors', [
+                ['window-to-monitor-left', 'Move to left monitor'],
+                ['window-to-monitor-right', 'Move to right monitor'],
+                ['window-to-monitor-up', 'Move to monitor above'],
+                ['window-to-monitor-down', 'Move to monitor below'],
             ]],
-            ['Redimensionar', [
-                ['resize-left', 'Borde a la izquierda'],
-                ['resize-right', 'Borde a la derecha'],
-                ['resize-up', 'Borde arriba'],
-                ['resize-down', 'Borde abajo'],
-                ['rotate-split', 'Rotar split (vertical/horizontal)'],
+            ['Resize', [
+                ['resize-left', 'Move border left'],
+                ['resize-right', 'Move border right'],
+                ['resize-up', 'Move border up'],
+                ['resize-down', 'Move border down'],
+                ['rotate-split', 'Rotate split (vertical/horizontal)'],
             ]],
-            ['Acciones', [
-                ['open-terminal', 'Abrir terminal'],
-                ['screenshot-region', 'Capturar region en Swappy'],
-                ['toggle-monocle', 'Monoculo (ver solo la ventana con foco)'],
-                ['toggle-tiling', 'Activar/desactivar tiling'],
-                ['toggle-floating', 'Alternar tiled/floating'],
-                ['float-next-window', 'La proxima ventana se abre flotante'],
-                ['close-window', 'Cerrar ventana'],
-                ['toggle-decoration', 'Ocultar/mostrar titlebar'],
-                ['show-focused-info', 'Mostrar WM_CLASS de la ventana'],
-                ['show-help', 'Mostrar modal de ayuda'],
+            ['Actions', [
+                ['open-terminal', 'Open terminal'],
+                ['screenshot-region', 'Capture region in Swappy'],
+                ['toggle-monocle', 'Monocle (show only the focused window)'],
+                ['toggle-tiling', 'Toggle tiling'],
+                ['toggle-floating', 'Toggle tiled/floating'],
+                ['float-next-window', 'Float the next window'],
+                ['close-window', 'Close window'],
+                ['toggle-decoration', 'Toggle title bar'],
+                ['show-focused-info', 'Show window WM_CLASS'],
+                ['show-help', 'Show shortcut help'],
             ]],
         ];
 
@@ -565,20 +565,20 @@ export default class TilingPreferences extends ExtensionPreferences {
         }
 
         const switchWsGroup = new Adw.PreferencesGroup({
-            title: 'Cambiar workspace local',
-            description: 'Super+N cambia solamente el monitor que tiene el foco.',
+            title: 'Switch local workspace',
+            description: 'Super+N switches only the focused monitor.',
         });
         shortcutsPage.add(switchWsGroup);
 
         const moveWsGroup = new Adw.PreferencesGroup({
-            title: 'Mover ventana a workspace local',
+            title: 'Move window to local workspace',
         });
         shortcutsPage.add(moveWsGroup);
 
         const wsCount = settings.get_int('workspace-count');
         for (let i = 1; i <= wsCount; i++) {
-            makeShortcutRow(switchWsGroup, `switch-local-workspace-${i}`, `Cambiar al workspace ${i}`);
-            makeShortcutRow(moveWsGroup, `move-window-to-workspace-${i}`, `Mover al workspace ${i}`);
+            makeShortcutRow(switchWsGroup, `switch-local-workspace-${i}`, `Switch to workspace ${i}`);
+            makeShortcutRow(moveWsGroup, `move-window-to-workspace-${i}`, `Move to workspace ${i}`);
         }
 
         window.connect('close-request', () => {

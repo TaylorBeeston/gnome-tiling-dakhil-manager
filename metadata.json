@@ -1,7 +1,7 @@
 {
   "uuid": "dwindle@taylorbeeston",
   "name": "Dwindle",
-  "description": "Tiling automatico tipo BSP para GNOME: dwindle, monoculo, ventanas flotantes, foco entre monitores, gaps y atajos custom.",
+  "description": "Dwindle BSP tiling for GNOME with monocle, floating windows, monitor-aware focus, gaps, animations, and custom shortcuts.",
   "shell-version": ["48", "49", "50"],
   "settings-schema": "org.gnome.shell.extensions.dwindle"
 }
