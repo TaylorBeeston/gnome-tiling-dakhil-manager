@@ -3,7 +3,9 @@ import test from 'node:test';
 
 import {
     actualWorkspaceForLocal,
+    migrateTreeConnectors,
     modulo,
+    resizedSplitRatio,
     parseTreeKey,
     shiftedOffset,
     shiftTreeKeyForConnector,
@@ -56,4 +58,30 @@ test('tree keys follow shifted inactive monitors without collisions', () => {
         shiftTreeKeyForConnector(treeKey(4, 'eDP-1'), 'Meta-0', 3, 10),
         treeKey(4, 'eDP-1')
     );
+});
+
+test('fallback tree connectors migrate independently of saved offsets', () => {
+    const laptopTree = {name: 'laptop'};
+    const virtualTree = {name: 'virtual'};
+    const trees = new Map([
+        [treeKey(3, 'monitor-0'), laptopTree],
+        [treeKey(7, 'monitor-1'), virtualTree],
+        [treeKey(4, 'unchanged'), {name: 'unchanged'}],
+    ]);
+    const migrated = migrateTreeConnectors(trees, new Map([
+        [0, 'eDP-1'],
+        [1, 'Meta-0'],
+    ]));
+
+    assert.equal(migrated.get(treeKey(3, 'eDP-1')), laptopTree);
+    assert.equal(migrated.get(treeKey(7, 'Meta-0')), virtualTree);
+    assert.equal(migrated.get(treeKey(4, 'unchanged')).name, 'unchanged');
+    assert.equal(migrated.has(treeKey(3, 'monitor-0')), false);
+});
+
+test('pointer resize adjusts the shared split from either child', () => {
+    assert.equal(resizedSplitRatio(0.5, 100, 1000, true), 0.6);
+    assert.equal(resizedSplitRatio(0.5, 100, 1000, false), 0.4);
+    assert.equal(resizedSplitRatio(0.85, 100, 1000, true), 0.9);
+    assert.equal(resizedSplitRatio(0.15, 100, 1000, false), 0.1);
 });

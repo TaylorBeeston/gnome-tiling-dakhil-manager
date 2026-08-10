@@ -170,7 +170,7 @@
       <summary>Toggle automatic tiling</summary>
     </key>
     <key name="toggle-floating" type="as">
-      <default><![CDATA[['<Super>v']]]></default>
+      <default><![CDATA[['<Super>space']]]></default>
       <summary>Toggle the focused window between tiled and floating</summary>
     </key>
     <key name="float-next-window" type="as">

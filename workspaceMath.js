@@ -37,3 +37,30 @@ export function shiftTreeKeyForConnector(key, targetConnector, delta, count) {
 
     return treeKey(modulo(workspaceIndex + delta, count), connector);
 }
+
+export function migrateTreeConnectors(trees, connectors) {
+    const migrations = new Map(
+        Array.from(connectors, ([monitor, connector]) =>
+            [`monitor-${monitor}`, connector])
+    );
+
+    return new Map(Array.from(trees, ([key, tree]) => {
+        const {workspaceIndex, connector} = parseTreeKey(key);
+
+        return [
+            treeKey(
+                workspaceIndex,
+                migrations.get(connector) ?? connector
+            ),
+            tree,
+        ];
+    }));
+}
+
+export function resizedSplitRatio(ratio, deltaPixels, effectivePixels, inA) {
+    if (effectivePixels <= 0) return ratio;
+
+    const signedDelta = inA ? deltaPixels : -deltaPixels;
+
+    return Math.max(0.1, Math.min(0.9, ratio + signedDelta / effectivePixels));
+}

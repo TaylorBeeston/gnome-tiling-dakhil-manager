@@ -18,8 +18,9 @@ const {PrimarySystemBar, SecondarySystemBar} =
     await import(`./secondaryWorkspacePanel.js${reloadSuffix}`);
 const {
     actualWorkspaceForLocal,
+    migrateTreeConnectors,
     modulo,
-    parseTreeKey,
+    resizedSplitRatio,
     shiftedOffset,
     shiftTreeKeyForConnector,
     treeKey,
@@ -44,6 +45,43 @@ const DisplayConfigProxy = Gio.DBusProxy.makeProxyWrapper(`
 </node>`);
 
 const NATIVE_MUTTER_SCHEMA = 'org.gnome.mutter';
+const POINTER_RESIZE_OPS = new Set([
+    Meta.GrabOp.RESIZING_NW,
+    Meta.GrabOp.RESIZING_N,
+    Meta.GrabOp.RESIZING_NE,
+    Meta.GrabOp.RESIZING_E,
+    Meta.GrabOp.RESIZING_SW,
+    Meta.GrabOp.RESIZING_S,
+    Meta.GrabOp.RESIZING_SE,
+    Meta.GrabOp.RESIZING_W,
+]);
+const POINTER_MOVE_OPS = new Set([
+    Meta.GrabOp.MOVING,
+    Meta.GrabOp.MOVING_UNCONSTRAINED,
+]);
+const EAST_RESIZE_OPS = new Set([
+    Meta.GrabOp.RESIZING_NE,
+    Meta.GrabOp.RESIZING_E,
+    Meta.GrabOp.RESIZING_SE,
+]);
+const WEST_RESIZE_OPS = new Set([
+    Meta.GrabOp.RESIZING_NW,
+    Meta.GrabOp.RESIZING_SW,
+    Meta.GrabOp.RESIZING_W,
+]);
+const NORTH_RESIZE_OPS = new Set([
+    Meta.GrabOp.RESIZING_NW,
+    Meta.GrabOp.RESIZING_N,
+    Meta.GrabOp.RESIZING_NE,
+]);
+const SOUTH_RESIZE_OPS = new Set([
+    Meta.GrabOp.RESIZING_SW,
+    Meta.GrabOp.RESIZING_S,
+    Meta.GrabOp.RESIZING_SE,
+]);
+const UNCONSTRAINED_GRAB_MASK = 1024;
+
+
 function laterAdd(type, callback) {
     return global.compositor.get_laters().add(type, callback);
 }
@@ -73,6 +111,8 @@ export default class TilingExtension extends Extension {
         this._retileSourceId = 0;
         this._managedWorkspaceMoves = new Set();
         this._managedMonitorMoves = new Set();
+        this._grabState = null;
+        this._grabEndSourceId = 0;
         this._workspaceCount = Math.max(MIN_WORKSPACES,
             Math.min(MAX_WORKSPACES, this._settings.get_int('workspace-count')));
         this._monitorWorkspaceOffsets = this._loadMonitorWorkspaceOffsets();
@@ -103,6 +143,7 @@ export default class TilingExtension extends Extension {
         this._workspaceAnimationSources = new Set();
         this._animatedActors = new Set();
         this._workspaceCloneContainers = new Set();
+        this._workspaceTransitionActors = new Set();
         this._workspaceSwitching = false;
         this._animationDisabledClasses = new Set(
             this._settings.get_strv('animation-disabled-classes')
@@ -192,8 +233,10 @@ export default class TilingExtension extends Extension {
             (_d, win) => this._onWindowCreated(win));
         this._switchWsId = global.window_manager.connect('switch-workspace',
             (_wm, from, to) => this._onWorkspaceSwitch(from, to));
+        this._grabOpBeginId = global.display.connect('grab-op-begin',
+            (_d, win, op) => this._onGrabOpBegin(win, op));
         this._grabOpEndId = global.display.connect('grab-op-end',
-            (_d, win) => this._onGrabOpEnd(win));
+            (_d, win, op) => this._onGrabOpEnd(win, op));
         this._monitorsChangedId = Main.layoutManager.connect('monitors-changed',
             () => this._onMonitorsChanged());
 
@@ -203,6 +246,7 @@ export default class TilingExtension extends Extension {
             this._handleExistingOrNewWindow(win);
 
         this._retileAll();
+        this._queueRetileAll();
         this._animationReadySourceId = GLib.idle_add(
             GLib.PRIORITY_DEFAULT_IDLE,
             () => {
@@ -242,9 +286,17 @@ export default class TilingExtension extends Extension {
             global.window_manager.disconnect(this._switchWsId);
             this._switchWsId = null;
         }
+        if (this._grabOpBeginId) {
+            global.display.disconnect(this._grabOpBeginId);
+            this._grabOpBeginId = null;
+        }
         if (this._grabOpEndId) {
             global.display.disconnect(this._grabOpEndId);
             this._grabOpEndId = null;
+        }
+        if (this._grabEndSourceId) {
+            GLib.source_remove(this._grabEndSourceId);
+            this._grabEndSourceId = 0;
         }
         if (this._monitorsChangedId) {
             Main.layoutManager.disconnect(this._monitorsChangedId);
@@ -283,6 +335,7 @@ export default class TilingExtension extends Extension {
             this._retileSourceId = 0;
         }
         this._retileQueued = false;
+        this._grabState = null;
         this._cleanupAnimations();
 
         if (this._floatingWindows) this._floatingWindows.clear();
@@ -439,6 +492,19 @@ export default class TilingExtension extends Extension {
 
             this._wmSettings.set_strv(wsKey, []);
         }
+
+        for (const key of [
+            'switch-input-source',
+            'switch-input-source-backward',
+        ]) {
+            const value = this._wmSettings.get_strv(key);
+
+            this._savedNativeBindings[key] = value;
+            this._wmSettings.set_strv(
+                key,
+                value.filter(accel => !accel.toLowerCase().includes('<super>'))
+            );
+        }
     }
 
     _uninstallNativeWorkspaceBindings() {
@@ -471,8 +537,15 @@ export default class TilingExtension extends Extension {
     }
 
     _installNativeWindowOverrides() {
-        if (!this._settings.get_boolean('disable-native-window-management')) return;
         this._savedNativeOverrides = [];
+        this._overrideNative(
+            NATIVE_PREFS_SCHEMA,
+            'resize-with-right-button',
+            'bool',
+            true
+        );
+
+        if (!this._settings.get_boolean('disable-native-window-management')) return;
 
         this._overrideNative('org.gnome.mutter', 'edge-tiling', 'bool', false);
         this._overrideNative('org.gnome.mutter', 'auto-maximize', 'bool', false);
@@ -840,12 +913,13 @@ export default class TilingExtension extends Extension {
     }
 
     _activeMonitor() {
+        const monitor = global.display.get_current_monitor();
+
+        if (monitor >= 0) return monitor;
+
         const win = global.display.focus_window;
 
-        if (win)
-            return win.get_monitor();
-
-        return global.display.get_current_monitor();
+        return win?.get_monitor() ?? Main.layoutManager.primaryIndex;
     }
 
     _monitorConnector(monitor) {
@@ -878,8 +952,6 @@ export default class TilingExtension extends Extension {
                 if (monitor >= 0) connectors.set(monitor, connector);
             }
 
-            const migrations = new Map();
-
             for (const [monitor, connector] of connectors) {
                 const fallback = `monitor-${monitor}`;
 
@@ -892,21 +964,10 @@ export default class TilingExtension extends Extension {
                     );
 
                 this._monitorWorkspaceOffsets.delete(fallback);
-                migrations.set(fallback, connector);
             }
 
-            if (migrations.size && this._trees) {
-                const migratedTrees = new Map();
-
-                for (const [key, tree] of this._trees) {
-                    const parsed = parseTreeKey(key);
-                    const connector = migrations.get(parsed.connector) ?? parsed.connector;
-
-                    migratedTrees.set(treeKey(parsed.workspaceIndex, connector), tree);
-                }
-
-                this._trees = migratedTrees;
-            }
+            if (this._trees)
+                this._trees = migrateTreeConnectors(this._trees, connectors);
 
             this._monitorConnectors = connectors;
             this._refreshSystemBars();
@@ -1400,7 +1461,8 @@ export default class TilingExtension extends Extension {
 
         const deeper = this._findClosestSplit(child, win, wantDir, childRect);
         if (deeper) return deeper;
-        if (node.dir === wantDir) return {split: node, rect: currentRect};
+        if (node.dir === wantDir)
+            return {split: node, rect: currentRect, inA};
         return null;
     }
 
@@ -1741,13 +1803,137 @@ export default class TilingExtension extends Extension {
         }
     }
 
-    _onGrabOpEnd(win) {
-        if (!win || !this._settings) return;
-        if (!this._settings.get_boolean('strict-tiling')) return;
+    _onGrabOpBegin(win, op) {
+        if (this._grabEndSourceId) {
+            GLib.source_remove(this._grabEndSourceId);
+            this._grabEndSourceId = 0;
+        }
+        this._grabState = null;
+
+        if (!win || !this._settings || !this._trees) return;
         if (!this._settings.get_boolean('tiling-enabled')) return;
-        if (this._floatingWindows && this._floatingWindows.has(win)) return;
+        const normalizedOp = op & ~UNCONSTRAINED_GRAB_MASK;
+
+        if (!POINTER_MOVE_OPS.has(normalizedOp)
+            && !POINTER_RESIZE_OPS.has(normalizedOp)) return;
         if (!this._isTileable(win)) return;
-        this._retileWorkspace(win.get_workspace());
+
+        const frame = win.get_frame_rect();
+
+        this._grabState = {
+            win,
+            op: normalizedOp,
+            monitor: win.get_monitor(),
+            workspace: win.get_workspace(),
+            frame: {
+                x: frame.x,
+                y: frame.y,
+                width: frame.width,
+                height: frame.height,
+            },
+        };
+    }
+
+    _grabMovesSplit(op, direction, inA) {
+        if (direction === 'v')
+            return inA ? EAST_RESIZE_OPS.has(op) : WEST_RESIZE_OPS.has(op);
+
+        return inA ? SOUTH_RESIZE_OPS.has(op) : NORTH_RESIZE_OPS.has(op);
+    }
+
+    _applyGrabbedResize(state) {
+        const {win, op, monitor, workspace, frame} = state;
+        if (!workspace || !this._trees) return false;
+
+        const tree = this._trees.get(this._treeKey(workspace, monitor));
+        if (!tree) return false;
+
+        const workArea = workspace.get_work_area_for_monitor(monitor);
+        const innerArea = this._innerArea(workArea);
+        const current = win.get_frame_rect();
+        const gap = this._settings.get_int('gap-size');
+        let changed = false;
+
+        for (const [direction, delta] of [
+            ['v', current.width - frame.width],
+            ['h', current.height - frame.height],
+        ]) {
+            if (Math.abs(delta) < 2) continue;
+
+            const result = this._findClosestSplit(tree, win, direction, innerArea);
+            if (!result || !this._grabMovesSplit(op, direction, result.inA)) continue;
+
+            const effective = (direction === 'v'
+                ? result.rect.width
+                : result.rect.height) - gap;
+            if (effective <= 0) continue;
+
+            result.split.ratio = resizedSplitRatio(
+                result.split.ratio,
+                delta,
+                effective,
+                result.inA
+            );
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    _onGrabOpEnd(win) {
+        if (this._grabEndSourceId)
+            GLib.source_remove(this._grabEndSourceId);
+
+        this._grabEndSourceId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT,
+            50,
+            () => {
+                this._grabEndSourceId = 0;
+                this._finishGrab(win);
+                return GLib.SOURCE_REMOVE;
+            }
+        );
+    }
+
+    _finishGrab(win) {
+        const state = this._grabState;
+        this._grabState = null;
+
+        if (!win || !this._settings || !this._trees) return;
+
+        if (!state || state.win !== win) {
+            if (this._settings.get_boolean('strict-tiling')
+                && this._settings.get_boolean('tiling-enabled')
+                && this._isTileable(win))
+                this._retileWorkspace(win.get_workspace());
+            return;
+        }
+
+        if (!this._settings.get_boolean('tiling-enabled')) return;
+        if (!this._isTileable(win)) return;
+
+        if (POINTER_MOVE_OPS.has(state.op)
+            && (win.get_monitor() !== state.monitor
+                || win.get_workspace() !== state.workspace)) {
+            this._removeFromTree(win);
+            this._addToTree(win, null);
+            this._queueRetileAll();
+            return;
+        }
+
+        if (POINTER_RESIZE_OPS.has(state.op)) {
+            if (win.get_monitor() !== state.monitor) {
+                this._managedMonitorMoves.add(win);
+                win.move_to_monitor(state.monitor);
+            }
+
+            this._applyGrabbedResize(state);
+            this._queueRetileAll();
+            return;
+        }
+
+        if (this._settings.get_boolean('strict-tiling'))
+            this._retileWorkspace(win.get_workspace());
     }
 
     _handleExistingOrNewWindow(win, splitTarget = null) {
@@ -1841,12 +2027,14 @@ export default class TilingExtension extends Extension {
         if (this._floatingWindows) this._floatingWindows.delete(win);
         if (this._lastFocusedTileable === win) this._lastFocusedTileable = null;
         if (this._monocleWin === win) this._exitMonocle();
+        if (this._grabState?.win === win) this._grabState = null;
         this._removeFromTree(win);
         this._queueRetileAll();
     }
 
     _onWindowWorkspaceChanged(win) {
         if (this._managedWorkspaceMoves?.delete(win)) return;
+        if (this._grabState?.win === win) return;
 
         this._removeFromTree(win);
         if (this._isTileable(win))
@@ -1856,6 +2044,7 @@ export default class TilingExtension extends Extension {
 
     _onWindowMonitorChanged(win) {
         if (this._managedMonitorMoves?.delete(win)) return;
+        if (this._grabState?.win === win) return;
 
         this._removeFromTree(win);
         if (this._isTileable(win))
@@ -2159,7 +2348,24 @@ export default class TilingExtension extends Extension {
         this._pendingWindowAnimations.set(actor, sourceId);
     }
 
+    _cancelWorkspaceTransitions() {
+        for (const sourceId of (this._workspaceAnimationSources ?? [])) {
+            try { laterRemove(sourceId); } catch (_error) {}
+        }
+        this._workspaceAnimationSources?.clear();
+
+        for (const actor of (this._workspaceTransitionActors ?? []))
+            this._resetActorAnimation(actor);
+        this._workspaceTransitionActors?.clear();
+
+        for (const container of (this._workspaceCloneContainers ?? [])) {
+            try { container.destroy(); } catch (_error) {}
+        }
+        this._workspaceCloneContainers?.clear();
+    }
+
     _prepareWorkspaceTransition(monitor, targetWorkspace, direction) {
+        this._cancelWorkspaceTransitions();
         if (!this._animationsReady) return null;
         if (!this._settings.get_boolean('workspace-animations-enabled')) return null;
 
@@ -2219,6 +2425,7 @@ export default class TilingExtension extends Extension {
             this._resetActorAnimation(actor);
             actor.opacity = 0;
             this._animatedActors.add(actor);
+            this._workspaceTransitionActors.add(actor);
         }
 
         return {
@@ -2260,6 +2467,7 @@ export default class TilingExtension extends Extension {
                 for (const actor of incomingActors) {
                     if (!actor.get_parent()) {
                         this._animatedActors?.delete(actor);
+                        this._workspaceTransitionActors?.delete(actor);
                         continue;
                     }
 
@@ -2271,6 +2479,7 @@ export default class TilingExtension extends Extension {
                         mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                         onComplete: () => {
                             this._animatedActors?.delete(actor);
+                            this._workspaceTransitionActors?.delete(actor);
                         },
                     });
                 }
@@ -2278,8 +2487,10 @@ export default class TilingExtension extends Extension {
                 this._workspaceCloneContainers?.delete(container);
                 try { container.destroy(); } catch (_destroyError) {}
 
-                for (const actor of incomingActors)
+                for (const actor of incomingActors) {
                     this._resetActorAnimation(actor);
+                    this._workspaceTransitionActors?.delete(actor);
+                }
             }
         });
         this._workspaceAnimationSources.add(sourceId);
@@ -2296,24 +2507,17 @@ export default class TilingExtension extends Extension {
         }
         this._pendingWindowAnimations?.clear();
 
-        for (const sourceId of (this._workspaceAnimationSources ?? [])) {
-            try { laterRemove(sourceId); } catch (_error) {}
-        }
-        this._workspaceAnimationSources?.clear();
+        this._cancelWorkspaceTransitions();
 
         for (const actor of (this._animatedActors ?? []))
             this._resetActorAnimation(actor);
         this._animatedActors?.clear();
 
-        for (const container of (this._workspaceCloneContainers ?? [])) {
-            try { container.destroy(); } catch (_error) {}
-        }
-        this._workspaceCloneContainers?.clear();
-
         this._animationsReady = false;
         this._pendingWindowAnimations = null;
         this._workspaceAnimationSources = null;
         this._animatedActors = null;
+        this._workspaceTransitionActors = null;
         this._workspaceCloneContainers = null;
     }
 
