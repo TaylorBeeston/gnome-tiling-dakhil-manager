@@ -1,6 +1,8 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
+import Meta from 'gi://Meta';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -230,6 +232,145 @@ class MetricsSampler {
 
 const metricsSampler = new MetricsSampler();
 
+const APPINDICATOR_ROLE_PREFIX = 'appindicator-';
+
+function appIndicatorsInPanelOrder() {
+    const indicators = new Set(Object.entries(Main.panel.statusArea)
+        .filter(([role, indicator]) =>
+            role.startsWith(APPINDICATOR_ROLE_PREFIX) && indicator?._indicator)
+        .map(([, indicator]) => indicator));
+
+    return [Main.panel._leftBox, Main.panel._centerBox, Main.panel._rightBox]
+        .flatMap(box => box.get_children())
+        .map(container => container.child ?? container)
+        .filter(indicator => indicators.has(indicator));
+}
+
+class TrayView {
+    constructor() {
+        this.actor = new St.BoxLayout({
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._mirrors = new Map();
+        this._boxSignals = [
+            Main.panel._leftBox,
+            Main.panel._centerBox,
+            Main.panel._rightBox,
+        ].flatMap(box => [
+            [box, box.connect('child-added', () => this._sync())],
+            [box, box.connect('child-removed', () => this._sync())],
+        ]);
+        this._sync();
+    }
+
+    _sync() {
+        const indicators = appIndicatorsInPanelOrder();
+
+        for (const indicator of [...this._mirrors.keys()]) {
+            if (!indicators.includes(indicator)) this._removeMirror(indicator);
+        }
+
+        indicators.forEach((indicator, index) => {
+            if (!this._mirrors.has(indicator)) this._addMirror(indicator);
+
+            this.actor.set_child_at_index(this._mirrors.get(indicator).actor, index);
+        });
+    }
+
+    _addMirror(indicator) {
+        const clone = new Clutter.Clone({source: indicator});
+        const actor = new St.Bin({
+            reactive: true,
+            track_hover: true,
+            y_align: Clutter.ActorAlign.CENTER,
+            child: clone,
+        });
+        const mirror = {actor, sizeLaterId: 0};
+        // A clone scales its source to fit, so pin it to the source's real
+        // size. Resizing inside the panel's allocation pass would leave the bar
+        // unallocated for that frame, so wait for the next one.
+        const syncSize = () => {
+            if (mirror.sizeLaterId) return;
+
+            mirror.sizeLaterId = global.compositor.get_laters().add(
+                Meta.LaterType.BEFORE_REDRAW,
+                () => {
+                    mirror.sizeLaterId = 0;
+                    clone.set_size(...indicator.get_size());
+                    return GLib.SOURCE_REMOVE;
+                }
+            );
+        };
+        // The indicator's own menu opens under whichever view was pressed last.
+        const forward = handler => (_actor, event) => {
+            indicator.menu.sourceActor = actor;
+            return indicator[handler](event);
+        };
+        const restoreMenuSource = (_actor, event) => {
+            const type = event.type();
+
+            if (type === Clutter.EventType.BUTTON_PRESS
+                || type === Clutter.EventType.TOUCH_BEGIN
+                || type === Clutter.EventType.KEY_PRESS)
+                indicator.menu.sourceActor = indicator;
+
+            return Clutter.EVENT_PROPAGATE;
+        };
+
+        actor.connect('button-press-event', forward('vfunc_button_press_event'));
+        actor.connect('scroll-event', forward('vfunc_scroll_event'));
+        indicator.bind_property('visible', actor, 'visible',
+            GObject.BindingFlags.SYNC_CREATE);
+
+        syncSize();
+        this._mirrors.set(indicator, Object.assign(mirror, {
+            allocationId: indicator.connect('notify::allocation', syncSize),
+            eventId: indicator.connect('event', restoreMenuSource),
+            menuId: indicator.menu.connect('open-state-changed', (_menu, open) => {
+                if (!open) indicator.menu.sourceActor = indicator;
+            }),
+            destroyId: indicator.connect('destroy', () => this._removeMirror(indicator)),
+        }));
+        this.actor.add_child(actor);
+    }
+
+    _removeMirror(indicator) {
+        const mirror = this._mirrors.get(indicator);
+
+        if (!mirror) return;
+
+        this._mirrors.delete(indicator);
+
+        if (mirror.sizeLaterId)
+            global.compositor.get_laters().remove(mirror.sizeLaterId);
+
+        indicator.disconnect(mirror.allocationId);
+        indicator.disconnect(mirror.eventId);
+        indicator.disconnect(mirror.destroyId);
+        indicator.menu?.disconnect(mirror.menuId);
+
+        if (indicator.menu?.sourceActor === mirror.actor)
+            indicator.menu.sourceActor = indicator;
+
+        mirror.actor.destroy();
+    }
+
+    destroy() {
+        for (const [box, id] of this._boxSignals) box.disconnect(id);
+
+        this._boxSignals = [];
+
+        for (const [indicator, {actor}] of this._mirrors) {
+            if (indicator.menu.sourceActor === actor) indicator.menu.close();
+        }
+
+        for (const indicator of [...this._mirrors.keys()])
+            this._removeMirror(indicator);
+
+        this.actor.destroy();
+    }
+}
+
 class ClockView {
     constructor() {
         this.actor = new St.Label({
@@ -417,8 +558,9 @@ export class PrimarySystemBar {
 }
 
 export class SecondarySystemBar {
-    constructor(monitor, _connector, count, activate, spacing) {
+    constructor(monitor, _connector, count, activate, spacing, showTray) {
         this._content = new BarContent(count, activate, spacing);
+        this._tray = showTray ? new TrayView() : null;
         this._actor = new St.Widget({
             layout_manager: new Clutter.BinLayout(),
             reactive: true,
@@ -432,6 +574,9 @@ export class SecondarySystemBar {
         });
 
         this._right.add_child(this._content.metrics.actor);
+
+        if (this._tray) this._right.add_child(this._tray.actor);
+
         this._actor.add_child(this._content.left);
         this._actor.add_child(this._content.title);
         this._actor.add_child(this._right);
@@ -456,10 +601,12 @@ export class SecondarySystemBar {
         if (!this._actor) return;
 
         Main.layoutManager.removeChrome(this._actor);
+        this._tray?.destroy();
         this._content.destroy();
         this._right.destroy();
         this._actor.destroy();
         this._content = null;
+        this._tray = null;
         this._right = null;
         this._actor = null;
     }

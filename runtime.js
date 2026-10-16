@@ -227,6 +227,8 @@ export default class TilingExtension extends Extension {
                 () => this._applyPanelSpacing()),
             this._settings.connect('changed::panel-show-focused-app',
                 () => this._updateSystemBars()),
+            this._settings.connect('changed::panel-secondary-tray',
+                () => this._refreshSystemBars()),
         ];
 
         this._windowCreatedId = global.display.connect('window-created',
@@ -999,7 +1001,8 @@ export default class TilingExtension extends Extension {
                     null,
                     monitor
                 ),
-                this._settings.get_int('panel-spacing')
+                this._settings.get_int('panel-spacing'),
+                this._settings.get_boolean('panel-secondary-tray')
             );
 
             this._secondaryWorkspacePanels.set(connector, {monitor, panel});

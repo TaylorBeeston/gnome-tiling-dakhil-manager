@@ -296,5 +296,9 @@
       <default>true</default>
       <summary>Show the focused window title in the center of the system bar.</summary>
     </key>
+    <key name="panel-secondary-tray" type="b">
+      <default>true</default>
+      <summary>Mirror the system tray (AppIndicator icons) on the Meta-0 bar.</summary>
+    </key>
   </schema>
 </schemalist>
