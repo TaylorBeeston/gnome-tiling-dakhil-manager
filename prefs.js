@@ -261,6 +261,14 @@ export default class TilingPreferences extends ExtensionPreferences {
             Gio.SettingsBindFlags.DEFAULT);
         panelGroup.add(focusedAppRow);
 
+        const secondaryTrayRow = new Adw.SwitchRow({
+            title: 'System tray on Meta-0',
+            subtitle: 'Mirror tray icons on the Meta-0 bar. Clicks open the same menus.',
+        });
+        settings.bind('panel-secondary-tray', secondaryTrayRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        panelGroup.add(secondaryTrayRow);
+
         const floatGroup = new Adw.PreferencesGroup({
             title: 'Floating applications',
             description: 'Select applications that should open floating. Add an unlisted WM_CLASS manually below. Super+V toggles the focused window at runtime.',
